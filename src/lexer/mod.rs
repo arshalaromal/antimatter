@@ -5,13 +5,13 @@ use logos::Logos;
 // Skip standard whitespace
 #[logos(skip r"[ \t\n\f\r]+")]
 
-// Skip single-line comments: // followed by anything until a newline
-#[regex(r"//[^\n]*", logos::skip)]
+// Skip single-line comments (explicitly allowing greedy matching)
+#[logos(skip(r"//[^\n]*", allow_greedy = true))]
 
-// Skip multi-line comments: /* followed by anything until */
-#[regex(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", logos::skip)]
+// Skip multi-line comments (explicitly allowing greedy matching)
+#[logos(skip(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", allow_greedy = true))]
 
-
+//THis Token enum contains all tokens for lexer to output.
 pub enum Token {
     // --- KEYWORDS ---
     #[token("var")] Var,

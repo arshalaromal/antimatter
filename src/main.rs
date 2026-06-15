@@ -1,7 +1,6 @@
-pub mod lexer;
 
-use lexer::Token;
 use logos::Logos;
+use antimatter::lexer::Token;
 
 fn main() {
     // Test Code
