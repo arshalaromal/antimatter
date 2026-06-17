@@ -11,7 +11,7 @@ use logos::Logos;
 // Skip multi-line comments (explicitly allowing greedy matching)
 #[logos(skip(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", allow_greedy = true))]
 
-//THis Token enum contains all tokens for lexer to output.
+//This Token enum contains all tokens for lexer to output.
 pub enum Token {
     // --- KEYWORDS ---
     #[token("var")] Var,
@@ -36,6 +36,7 @@ pub enum Token {
     #[token("continue")] Continue,
     #[token("type")] Type,
     #[token("use")] Use,
+    #[token("yield")] Yield,
 
     // --- PUNCTUATION & DIRECTIVES ---
     #[token("@")] At,
