@@ -36,6 +36,7 @@ pub enum Token {
     #[token("continue")] Continue,
     #[token("type")] Type,
     #[token("use")] Use,
+    #[token("self")] SelfKw,
     #[token("yield")] Yield,
 
     // --- PUNCTUATION & DIRECTIVES ---
