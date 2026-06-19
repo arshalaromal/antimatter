@@ -24,7 +24,7 @@ fn assert_tokens(source: &str, expected: &[Token]) {
 
 #[test]
 fn test_keywords() {
-    let code = "var const fn return if else while for in switch default defer pub struct impl enum true false break continue type use";
+    let code = "var const fn return if else while for in switch default defer pub struct impl enum true false break continue type use self";
 
     assert_tokens(code, &[
         Token::Var, Token::Const, Token::Fn, Token::Return,
@@ -32,7 +32,7 @@ fn test_keywords() {
         Token::In, Token::Switch, Token::Default, Token::Defer,
         Token::Pub, Token::Struct, Token::Impl, Token::Enum,
         Token::True, Token::False, Token::Break, Token::Continue,
-        Token::Type, Token::Use,
+        Token::Type, Token::Use, Token::SelfKw,
     ]);
 }
 
