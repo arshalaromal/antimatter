@@ -1,10 +1,6 @@
 use crate::lexer::Token;
 
-// =====================================================================
-// 1. TYPES (Syntactic Representation)
-// =====================================================================
-
-/// Represents a data type as written by the user.
+/// Represents a data type
 #[derive(Debug, PartialEq, Clone)]
 pub enum Type {
     /// A standard type like `Int`, `String`, `Bool`, or `AStruct`.
