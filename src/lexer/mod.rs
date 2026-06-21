@@ -1,4 +1,5 @@
 use logos::Logos;
+use crate::error::{CompilerError, ErrorKind};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 
@@ -95,16 +96,58 @@ pub enum Token {
     })]
     RawString(String),
 
-    #[regex(r#""(?:[^"\\]|\\.)*""#, |lex| lex.slice().to_string())]
+
+    #[regex(r#""(?:[^"\\]|\\.)*""#, |lex| {
+        let s = lex.slice();
+        s[1..s.len()-1].to_string()
+    })]
     StringLit(String),
 
     // --- LITERALS & IDENTIFIERS ---
-    #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().parse::<f64>().unwrap())]
+
+    #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().parse::<f64>().ok())]
     FloatLit(f64),
 
-    #[regex("[0-9]+", |lex| lex.slice().parse::<i64>().unwrap())]
+    #[regex("[0-9]+", |lex| lex.slice().parse::<i64>().ok())]
     IntLit(i64),
 
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
     Ident(String),
+}
+
+
+/// Executes the lexer over the raw source code.
+/// Returns a vector of tokens, or forcefully terminates with Error.
+pub fn tokenize(source: &str) -> Vec<Token> {
+    // Initialize the Logos lexer
+    let mut lex = Token::lexer(source);
+    let mut tokens = Vec::new();
+
+    // Loop through every token in the text
+    while let Some(result) = lex.next() {
+        match result {
+            Ok(token) => tokens.push(token),
+            Err(_) => {
+                let span = lex.span();
+
+                // Count how many newlines (\n) happened before this error
+                let line = source[..span.start].chars().filter(|&c| c == '\n').count() + 1;
+
+                // Find the distance from the last newline to get the column
+                let last_newline = source[..span.start].rfind('\n').map(|i| i + 1).unwrap_or(0);
+                let column = span.start - last_newline + 1;
+
+                let bad_text = lex.slice().to_string();
+
+                CompilerError::new(
+                    ErrorKind::Lexer,
+                    line,
+                    column,
+                    format!("Unrecognized token '{}'", bad_text),
+                ).throw();
+            }
+        }
+    }
+
+    tokens
 }

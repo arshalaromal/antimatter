@@ -1,4 +1,5 @@
 use logos::Logos;
+// Make sure this path matches your actual project structure
 use antimatter::lexer::Token;
 
 fn assert_tokens(source: &str, expected: &[Token]) {
@@ -32,7 +33,7 @@ fn test_keywords() {
         Token::In, Token::Switch, Token::Default, Token::Defer,
         Token::Pub, Token::Struct, Token::Impl, Token::Enum,
         Token::True, Token::False, Token::Break, Token::Continue,
-        Token::Type, Token::Use, Token::SelfKw,Token::Yield
+        Token::Type, Token::Use, Token::SelfKw, Token::Yield,
     ]);
 }
 
@@ -92,7 +93,7 @@ fn test_strings() {
     "#;
 
     assert_tokens(code, &[
-        Token::StringLit("\"Hello ${name}\"".to_string()),
+        Token::StringLit("Hello ${name}".to_string()),
         Token::RawString("Raw string \\n no escapes".to_string()),
     ]);
 }
@@ -110,4 +111,25 @@ fn test_comments_are_ignored() {
         Token::Var, Token::Ident("x".to_string()), Token::Assign, Token::IntLit(10), Token::SemiColon,
         Token::Var, Token::Ident("y".to_string()), Token::Assign, Token::IntLit(20), Token::SemiColon,
     ]);
+}
+
+#[test]
+fn test_invalid_characters_caught() {
+    let code = "var $x";
+    let mut lexer = Token::lexer(code);
+
+    assert_eq!(lexer.next(), Some(Ok(Token::Var)));
+
+    // The lexer hits the '$' and flags an Error instead of crashing
+    assert_eq!(lexer.next(), Some(Err(())));
+    assert_eq!(lexer.slice(), "$");
+}
+
+#[test]
+fn test_number_overflow_caught() {
+    // This number is larger than i64::MAX.
+    let code = "999999999999999999999999999999999";
+    let mut lexer = Token::lexer(code);
+
+    assert_eq!(lexer.next(), Some(Err(())));
 }

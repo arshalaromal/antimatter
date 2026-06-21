@@ -5,7 +5,9 @@ use antimatter::lexer::Token;
 fn main() {
     // Test Code
     let code = r#"
-
+abc = 546;
+@dsf
+#31
     "#;
 
     println!("Source Code:\n{}", code);
