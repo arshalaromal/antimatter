@@ -221,10 +221,7 @@ pub enum Item {
     },
 
     /// Imports code from other modules.
-    Use {
-        /// Stored as a path array.
-        path: Vec<String>,
-    },
+    Use { path: Vec<String>, items: Vec<String> }
 }
 
 /// The root node of every single Antimatter file.
