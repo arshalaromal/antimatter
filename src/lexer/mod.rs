@@ -55,6 +55,9 @@ pub enum Token {
     SelfKw,
     #[token("yield")]
     Yield,
+    #[token("or")]
+    OrKw,
+
 
     // --- PUNCTUATION & DIRECTIVES ---
     #[token("@")]
@@ -83,6 +86,10 @@ pub enum Token {
     LBracket,
     #[token("]")]
     RBracket,
+    #[token("?")]
+    Question,
+    #[token("#")]
+    Hash,
 
     // --- MATH & LOGIC OPERATORS ---
     #[token("=")]
