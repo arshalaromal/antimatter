@@ -1,135 +1,437 @@
-use logos::Logos;
-// Make sure this path matches your actual project structure
-use antimatter::lexer::Token;
+// Lexer tests
 
-fn assert_tokens(source: &str, expected: &[Token]) {
-    let mut lexer = Token::lexer(source);
+use antimatter::error::CompilerError;
+use antimatter::lexer::{tokenize, StringPart, Token};
 
-    for (i, expected_token) in expected.iter().enumerate() {
-        let next_token = lexer.next();
-        assert_eq!(
-            next_token,
-            Some(Ok(expected_token.clone())),
-            "\nToken mismatch at index {} for source: '{}'\nExpected: {:?}\nGot: {:?}",
-            i, source, expected_token, next_token
-        );
-    }
+/// Lexes source and returns the tokens, dropping span info. Panics with the compiler's error message on bad input which is fine for tests
+/// that expect valid syntax.
+fn lex(src: &str) -> Vec<Token> {
+    tokenize(src)
+        .unwrap_or_else(|e| panic!("{}", e))
+        .into_iter()
+        .map(|st| st.token)
+        .collect()
+}
 
-    let final_token = lexer.next();
+/// Lexes source and returns the raw Result for tests that specifically
+/// want to check a lex failure.
+fn try_lex(src: &str) -> Result<Vec<Token>, CompilerError> {
+    tokenize(src).map(|tokens| tokens.into_iter().map(|st| st.token).collect())
+}
+
+//KEYWORDS
+#[test]
+fn test_keywords() {
     assert_eq!(
-        final_token, None,
-        "\nExpected EOF, but found extra token: {:?} in source: '{}'",
-        final_token, source
+        lex("var const fn return if else while for in pub struct impl enum type use self yield or break continue defer switch default Error true false"),
+        vec![
+            Token::Var, Token::Const, Token::Fn, Token::Return,
+            Token::If, Token::Else, Token::While, Token::For, Token::In,
+            Token::Pub, Token::Struct, Token::Impl, Token::Enum,
+            Token::Type, Token::Use, Token::SelfKw, Token::Yield,
+            Token::OrKw, Token::Break, Token::Continue, Token::Defer,
+            Token::Switch, Token::Default, Token::Error, Token::True, Token::False
+        ]
+    );
+}
+//OPERATORS
+#[test]
+fn test_arithmetic_operators() {
+    assert_eq!(
+        lex("+ - * / %"),
+        vec![Token::Plus, Token::Minus, Token::Star, Token::Slash, Token::Percent]
     );
 }
 
 #[test]
-fn test_keywords() {
-    let code = "var const fn return if else while for in switch default defer pub struct impl enum true false break continue type use self yield";
-
-    assert_tokens(code, &[
-        Token::Var, Token::Const, Token::Fn, Token::Return,
-        Token::If, Token::Else, Token::While, Token::For,
-        Token::In, Token::Switch, Token::Default, Token::Defer,
-        Token::Pub, Token::Struct, Token::Impl, Token::Enum,
-        Token::True, Token::False, Token::Break, Token::Continue,
-        Token::Type, Token::Use, Token::SelfKw, Token::Yield,
-    ]);
+fn test_comparison_operators() {
+    assert_eq!(
+        lex("== != < > <= >="),
+        vec![Token::EqEq, Token::NotEq, Token::Lt, Token::Gt, Token::LtEq, Token::GtEq]
+    );
 }
 
+#[test]
+fn test_compound_assignment() {
+    assert_eq!(
+        lex("+= -= *= /= &= |= ^= <<= >>="),
+        vec![
+            Token::PlusEq, Token::MinusEq, Token::StarEq, Token::SlashEq,
+            Token::BitAndEq, Token::BitOrEq, Token::BitXorEq,
+            Token::ShlEq, Token::ShrEq,
+        ]
+    );
+}
+
+#[test]
+fn test_bitwise_operators() {
+    assert_eq!(
+        lex("& | ^ ~ << >>"),
+        vec![Token::BitAnd, Token::BitOr, Token::BitXor, Token::BitNot, Token::Shl, Token::Shr]
+    );
+}
+
+#[test]
+fn test_logical_operators() {
+    assert_eq!(lex("&& ||"), vec![Token::And, Token::Or]);
+}
+
+#[test]
+fn test_multichar_operators_not_split() {
+    assert_eq!(lex(">="), vec![Token::GtEq]);
+    assert_eq!(lex("<="), vec![Token::LtEq]);
+    assert_eq!(lex("=="), vec![Token::EqEq]);
+    assert_eq!(lex("&&"), vec![Token::And]);
+    assert_eq!(lex("<<="), vec![Token::ShlEq]);
+}
+
+#[test]
+fn test_adjacent_single_char_operators_stay_separate() {
+    assert_eq!(lex("! ="), vec![Token::Not, Token::Assign]);
+    assert_eq!(lex("!="), vec![Token::NotEq]);
+}
+
+//PUNCTUATION
 #[test]
 fn test_punctuation() {
-    let code = "@ -> :: . : ; , ( ) { } [ ]";
+    assert_eq!(
+        lex("@ -> :: . : ; , ( ) { } [ ] ? #"),
+        vec![
+            Token::At, Token::Arrow, Token::DoubleColon, Token::Dot,
+            Token::Colon, Token::SemiColon, Token::Comma,
+            Token::LParen, Token::RParen, Token::LBrace, Token::RBrace,
+            Token::LBracket, Token::RBracket, Token::Question, Token::Hash,
+        ]
+    );
+}
 
-    assert_tokens(code, &[
-        Token::At, Token::Arrow, Token::DoubleColon, Token::Dot,
-        Token::Colon, Token::SemiColon, Token::Comma,
-        Token::LParen, Token::RParen, Token::LBrace, Token::RBrace,
-        Token::LBracket, Token::RBracket
-    ]);
+//NUMERIC LITERALS
+#[test]
+fn test_integer_literal() {
+    assert_eq!(lex("42"), vec![Token::IntLit(42)]);
+    assert_eq!(lex("0"), vec![Token::IntLit(0)]);
 }
 
 #[test]
-fn test_math_and_logic_operators() {
-    let code = "= == ! != < > <= >= + - * / % && ||";
-
-    assert_tokens(code, &[
-        Token::Assign, Token::EqEq, Token::Not, Token::NotEq,
-        Token::Lt, Token::Gt, Token::LtEq, Token::GtEq,
-        Token::Plus, Token::Minus, Token::Star, Token::Slash,
-        Token::Percent, Token::And, Token::Or
-    ]);
+fn test_float_literal() {
+    assert_eq!(lex("3.14"), vec![Token::FloatLit(3.14)]);
+    assert_eq!(lex("0.5"), vec![Token::FloatLit(0.5)]);
 }
 
 #[test]
-fn test_bitwise_and_compound_assignments() {
-    let code = "& | ^ ~ << >> += -= *= /= &= |= ^= <<= >>=";
-
-    assert_tokens(code, &[
-        Token::BitAnd, Token::BitOr, Token::BitXor, Token::BitNot,
-        Token::Shl, Token::Shr, Token::PlusEq, Token::MinusEq,
-        Token::StarEq, Token::SlashEq, Token::BitAndEq, Token::BitOrEq,
-        Token::BitXorEq, Token::ShlEq, Token::ShrEq
-    ]);
+fn test_chained_dots_after_number() {
+    assert_eq!(
+        lex("1.2.3"),
+        vec![Token::FloatLit(1.2), Token::Dot, Token::IntLit(3)]
+    );
 }
 
 #[test]
-fn test_literals_and_identifiers() {
-    let code = "1024 3.14159 my_variable _hiddenVal";
+fn test_integer_then_dot_access() {
+    // Plain integer followed by member access must NOT be swallowed into a float.
+    assert_eq!(
+        lex("5.toString"),
+        vec![Token::IntLit(5), Token::Dot, Token::Ident("toString".to_string())]
+    );
+}
 
-    assert_tokens(code, &[
-        Token::IntLit(1024),
-        Token::FloatLit(3.14159),
-        Token::Ident("my_variable".to_string()),
-        Token::Ident("_hiddenVal".to_string()),
-    ]);
+//STRING LITERALS
+#[test]
+fn test_string_literal() {
+    assert_eq!(lex(r#""hello""#), vec![Token::StringLit("hello".to_string())]);
+    assert_eq!(lex(r#""hello world""#), vec![Token::StringLit("hello world".to_string())]);
 }
 
 #[test]
-fn test_strings() {
-    let code = r#"
-        "Hello ${name}"
-        `Raw string \n no escapes`
-    "#;
-
-    assert_tokens(code, &[
-        Token::StringLit("Hello ${name}".to_string()),
-        Token::RawString("Raw string \\n no escapes".to_string()),
-    ]);
+fn test_raw_string() {
+    assert_eq!(
+        lex(r#"`raw \n string`"#),
+        vec![Token::RawString(r"raw \n string".to_string())]
+    );
 }
 
 #[test]
-fn test_comments_are_ignored() {
-    let code = r#"
-        var x = 10; // This is a single line comment
-        /* This is a
-           multi-line comment */
-        var y = 20;
-    "#;
-
-    assert_tokens(code, &[
-        Token::Var, Token::Ident("x".to_string()), Token::Assign, Token::IntLit(10), Token::SemiColon,
-        Token::Var, Token::Ident("y".to_string()), Token::Assign, Token::IntLit(20), Token::SemiColon,
-    ]);
+fn test_empty_string() {
+    assert_eq!(lex(r#""""#), vec![Token::StringLit("".to_string())]);
 }
 
 #[test]
-fn test_invalid_characters_caught() {
-    let code = "var $x";
-    let mut lexer = Token::lexer(code);
-
-    assert_eq!(lexer.next(), Some(Ok(Token::Var)));
-
-    // The lexer hits the '$' and flags an Error instead of crashing
-    assert_eq!(lexer.next(), Some(Err(())));
-    assert_eq!(lexer.slice(), "$");
+fn test_string_with_escaped_quote() {
+    assert_eq!(
+        lex(r#""he said \"hi\"""#),
+        vec![Token::StringLit(r#"he said \"hi\""#.to_string())]
+    );
 }
 
 #[test]
-fn test_number_overflow_caught() {
-    // This number is larger than i64::MAX.
-    let code = "999999999999999999999999999999999";
-    let mut lexer = Token::lexer(code);
+fn test_escaped_dollar_is_not_interpolation() {
+    assert_eq!(lex(r#""price: \$5""#), vec![Token::StringLit(r"price: \$5".to_string())]);
+}
 
-    assert_eq!(lexer.next(), Some(Err(())));
+//IDENTIFIERS
+#[test]
+fn test_identifiers() {
+    assert_eq!(
+        lex("foo bar _private camelCase snake_case STARK"),
+        vec![
+            Token::Ident("foo".to_string()),
+            Token::Ident("bar".to_string()),
+            Token::Ident("_private".to_string()),
+            Token::Ident("camelCase".to_string()),
+            Token::Ident("snake_case".to_string()),
+            Token::Ident("STARK".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn test_identifier_with_numbers() {
+    assert_eq!(
+        lex("foo123 x1"),
+        vec![Token::Ident("foo123".to_string()), Token::Ident("x1".to_string())]
+    );
+}
+
+//COMMENTS
+#[test]
+fn test_line_comment_skipped() {
+    assert_eq!(
+        lex("var x // this is a comment"),
+        vec![Token::Var, Token::Ident("x".to_string())]
+    );
+}
+
+#[test]
+fn test_block_comment_skipped() {
+    assert_eq!(
+        lex("var /* ignore this */ x"),
+        vec![Token::Var, Token::Ident("x".to_string())]
+    );
+}
+
+#[test]
+fn test_comment_only() {
+    assert_eq!(lex("// nothing here"), vec![]);
+}
+
+#[test]
+fn test_block_comments_do_not_nest() {
+    // the block-comment regex is non-nesting C-style. It ends at the FIRST
+    // '*/' it finds, regardless of any '/*' seen along the way. In
+    // "/* a /* b */ c */" the comment is "/* a /* b */" (closed at the
+    // first */), leaving " c */" to be lexed as real tokens: Ident("c"),
+    // then Star and Slash from the leftover "*/".
+    assert_eq!(
+        lex("/* a /* b */ c */"),
+        vec![Token::Ident("c".to_string()), Token::Star, Token::Slash]
+    );
+}
+
+//SPANS (line/column tracking)
+#[test]
+fn test_span_first_token() {
+    let tokens = tokenize("var x = 5;").unwrap();
+    assert_eq!(tokens[0].span.line, 1);
+    assert_eq!(tokens[0].span.column, 1);
+}
+
+#[test]
+fn test_span_multiline() {
+    let tokens = tokenize("var x = 5;\nvar y = 10;").unwrap();
+    assert_eq!(tokens[5].span.line, 2);
+    assert_eq!(tokens[5].span.column, 1);
+}
+
+#[test]
+fn test_span_column_after_tab() {
+    let tokens = tokenize("\tx").unwrap();
+    assert_eq!(tokens[0].span.column, 2);
+}
+
+#[test]
+fn test_span_survives_crlf_line_endings() {
+    let tokens = tokenize("var x = 5;\r\nvar y = 10;").unwrap();
+    assert_eq!(tokens[5].span.line, 2);
+    assert_eq!(tokens[5].span.column, 1);
+}
+
+// STRING INTERPOLATION
+#[test]
+fn test_interpolated_string_simple() {
+    let tokens = lex(r#""Hello ${name}""#);
+    match &tokens[0] {
+        Token::InterpolatedStringLit(parts) => {
+            assert_eq!(parts.len(), 2);
+            assert_eq!(parts[0], StringPart::Literal("Hello ".to_string()));
+            assert_eq!(parts[1], StringPart::ExprSource("name".to_string()));
+        }
+        other => panic!("Expected InterpolatedStringLit, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_interpolated_string_multiple() {
+    let tokens = lex(r#""${a} and ${b}""#);
+    match &tokens[0] {
+        Token::InterpolatedStringLit(parts) => {
+            assert_eq!(parts.len(), 3);
+            assert_eq!(parts[0], StringPart::ExprSource("a".to_string()));
+            assert_eq!(parts[1], StringPart::Literal(" and ".to_string()));
+            assert_eq!(parts[2], StringPart::ExprSource("b".to_string()));
+        }
+        other => panic!("Expected InterpolatedStringLit, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_plain_string_no_dollar() {
+    assert_eq!(
+        lex(r#""no interpolation""#),
+        vec![Token::StringLit("no interpolation".to_string())]
+    );
+}
+
+#[test]
+fn test_interpolation_at_very_start() {
+    let tokens = lex(r#""${x}!""#);
+    match &tokens[0] {
+        Token::InterpolatedStringLit(parts) => {
+            assert_eq!(parts.len(), 2);
+            assert_eq!(parts[0], StringPart::ExprSource("x".to_string()));
+            assert_eq!(parts[1], StringPart::Literal("!".to_string()));
+        }
+        other => panic!("Expected InterpolatedStringLit, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_interpolation_at_very_end() {
+    let tokens = lex(r#""start${x}""#);
+    match &tokens[0] {
+        Token::InterpolatedStringLit(parts) => {
+            assert_eq!(parts.len(), 2);
+            assert_eq!(parts[0], StringPart::Literal("start".to_string()));
+            assert_eq!(parts[1], StringPart::ExprSource("x".to_string()));
+        }
+        other => panic!("Expected InterpolatedStringLit, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_interpolation_empty_expression() {
+    let tokens = lex(r#""${}""#);
+    match &tokens[0] {
+        Token::InterpolatedStringLit(parts) => {
+            assert_eq!(parts, &vec![StringPart::ExprSource("".to_string())]);
+        }
+        other => panic!("Expected InterpolatedStringLit, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_interpolation_with_method_call() {
+    let tokens = lex(r#""Hi ${user.get_name()}""#);
+    match &tokens[0] {
+        Token::InterpolatedStringLit(parts) => {
+            assert_eq!(parts[1], StringPart::ExprSource("user.get_name()".to_string()));
+        }
+        other => panic!("Expected InterpolatedStringLit, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_interpolation_with_nested_braces() {
+    let tokens = lex(r#""${obj.method({})}""#);
+    match &tokens[0] {
+        Token::InterpolatedStringLit(parts) => {
+            assert_eq!(parts, &vec![StringPart::ExprSource("obj.method({})".to_string())]);
+        }
+        other => panic!("Expected InterpolatedStringLit, got {:?}", other),
+    }
+}
+
+//ERROR
+#[test]
+fn test_unrecognized_character_is_an_error() {
+    let result = try_lex("var x = $;");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_unrecognized_character_error_has_correct_position() {
+    let result = tokenize("var x = $;");
+    match result {
+        Err(e) => {
+            assert_eq!(e.line, 1);
+            assert_eq!(e.column, 9);
+        }
+        Ok(_) => panic!("Expected a lex error"),
+    }
+}
+
+#[test]
+fn test_unrecognized_character_error_message() {
+    let result = tokenize("$");
+    match result {
+        Err(e) => {
+            let formatted = format!("{}", e);
+            assert!(formatted.contains("Unrecognized token"));
+            assert!(formatted.contains('$'));
+        }
+        Ok(_) => panic!("Expected a lex error"),
+    }
+}
+
+#[test]
+fn test_unrecognized_character_on_second_line_reports_correct_line() {
+    let result = tokenize("var x = 1;\nvar y = $;");
+    match result {
+        Err(e) => assert_eq!(e.line, 2),
+        Ok(_) => panic!("Expected a lex error"),
+    }
+}
+
+#[test]
+fn test_valid_tokens_before_error_do_not_panic() {
+    let result = try_lex("var a = 1; var b = 2; var c = $;");
+    assert!(result.is_err());
+}
+
+//REAL CODE
+#[test]
+fn test_real_var_decl() {
+    assert_eq!(
+        lex("var x: Int = 42;"),
+        vec![
+            Token::Var, Token::Ident("x".to_string()), Token::Colon,
+            Token::Ident("Int".to_string()), Token::Assign, Token::IntLit(42),
+            Token::SemiColon,
+        ]
+    );
+}
+
+#[test]
+fn test_real_function_signature() {
+    assert_eq!(
+        lex("fn add(a: Int, b: Int) -> Int"),
+        vec![
+            Token::Fn, Token::Ident("add".to_string()), Token::LParen,
+            Token::Ident("a".to_string()), Token::Colon, Token::Ident("Int".to_string()),
+            Token::Comma, Token::Ident("b".to_string()), Token::Colon,
+            Token::Ident("Int".to_string()), Token::RParen, Token::Arrow,
+            Token::Ident("Int".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn test_real_error_primitive() {
+    assert_eq!(
+        lex(r#"Error(#NotFound, "missing")"#),
+        vec![
+            Token::Error, Token::LParen, Token::Hash,
+            Token::Ident("NotFound".to_string()), Token::Comma,
+            Token::StringLit("missing".to_string()), Token::RParen,
+        ]
+    );
 }
