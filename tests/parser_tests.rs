@@ -904,7 +904,7 @@ fn test_switch_expression() {
     }
 }
 
-// CALLS, MEMBER ACCESS, INDEXING — INCLUDING CHAINED POSTFIX
+// CALLS, MEMBER ACCESS, INDEXING - INCLUDING CHAINED POSTFIX
 #[test]
 fn test_function_call() {
     let expr = parse_expr_src("foo(1, 2)");
@@ -992,7 +992,7 @@ fn test_propagate_then_member_access() {
     }
 }
 
-// STRING INTERPOLATION — PARSER LEVEL
+// STRING INTERPOLATION - PARSER LEVEL
 #[test]
 fn test_interpolated_string_to_ast() {
     let expr = parse_expr_src(r#""Hello ${name}!""#);
