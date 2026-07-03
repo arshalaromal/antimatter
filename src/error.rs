@@ -1,37 +1,28 @@
-#[derive(Debug, Clone, PartialEq)]
-pub enum ErrorKind {
-    Lexer,
-    Parser,
-    TypeCheck,
-}
+use std::fmt;
 
-/// The single, top-level Error struct that handles everything.
-#[derive(Debug, Clone)]
+/// A single Error produced anywhere in the compiler.
+///
+/// Plain data. It does not print itself and it does not exit the process.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilerError {
-    pub kind: ErrorKind,
     pub line: usize,
     pub column: usize,
     pub message: String,
 }
 
 impl CompilerError {
-    pub fn new(kind: ErrorKind, line: usize, column: usize, message: String) -> Self {
-        Self { kind, line, column, message }
-    }
-
-    /// Formats the error into a human-readable string and forcefully terminates the compiler.
-    pub fn throw(&self) {
-        let error_type = match self.kind {
-            ErrorKind::Lexer => "Syntax Error",
-            ErrorKind::Parser => "Parsing Error",
-            ErrorKind::TypeCheck => "Type Error",
-        };
-
-        eprintln!(
-            "[{}] Line {}, Col {}: {}",
-            error_type, self.line, self.column, self.message
-        );
-
-        std::process::exit(1);
+    pub fn new(line: usize, column: usize, message: String) -> Self {
+        Self { line, column, message }
     }
 }
+
+impl fmt::Display for CompilerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}: error: {}", self.line, self.column, self.message)
+    }
+}
+
+impl std::error::Error for CompilerError {}
+
+/// The result type every compiler stage returns.
+pub type CompilerResult<T> = Result<T, CompilerError>;

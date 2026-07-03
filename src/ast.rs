@@ -5,9 +5,9 @@ use crate::lexer::Token;
 pub enum Type {
     /// A standard type like `Int`, `String`, `Bool`, or `AStruct`.
     Basic(String),
-    /// An array type. eg: `[Int]`
-    Array(Box<Type>),
-    /// A map
+    /// A List type. eg: `[Int]`
+    List(Box<Type>),
+    /// A map type. eg: `{String: Int}`
     Map {
         key: Box<Type>,
         value: Box<Type>,
@@ -17,6 +17,8 @@ pub enum Type {
         parameters: Vec<Type>,
         return_type: Box<Type>,
     },
+    /// Wraps ANY type in a failable state. e.g., `![Int]` or `!{String: Int}`
+    Failable(Box<Type>),
 }
 
 /// Represents the raw datatypes which are hardcoded into Antimatter.
@@ -27,20 +29,25 @@ pub enum Literal {
     String(String),
     Bool(bool),
 }
-
-/// Represents a valid memory location on the Left Hand Side (L-Value) of an assignment.
+/// One segment inside an interpolated string.
+#[derive(Debug, PartialEq, Clone)]
+pub enum StringSegment {
+    Literal(String),   // plain text portion
+    Expr(Box<Expr>),   // evaluated expression
+}
+/// Represents a valid memory location on the Left Hand Side of an assignment.
 #[derive(Debug, PartialEq, Clone)]
 pub enum AssignTarget {
-    Identifier(String), //eg: var a = 123;
-
-    //eg: user.name = "Stark";
+    /// eg: `a = 123;`
+    Identifier(String),
+    /// eg: `user.name = "Stark";`
     MemberAccess {
         object: Box<Expr>,
         property: String,
     },
-    //eg: list[5] = 6;
+    /// eg: `list[5] = 6;`
     Index {
-        array: Box<Expr>,
+        list: Box<Expr>,
         index: Box<Expr>,
     },
 }
@@ -48,58 +55,83 @@ pub enum AssignTarget {
 /// Represents anything that computes to a value.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
-    ///Normal Core data types.
+    /// Normal core data types.
     Literal(Literal),
 
-    /// Names
+    /// A named variable reference.
     Identifier(String),
 
     /// The `self` keyword.
     SelfKw,
 
-    /// A single operator applied to a value. (-5, !active)
+    /// A single operator applied to a value. eg: `-5`, `!active`, `~mask`
     Unary { operator: Token, right: Box<Expr> },
 
-    /// Binary Operations (1+1,a*b)
+    /// Binary operations. eg: `1 + 1`, `a * b`, `x && y`
     Binary { left: Box<Expr>, operator: Token, right: Box<Expr> },
 
     /// Executing a function. eg: `process(val, secure=true)`
     Call { callee: Box<Expr>, arguments: Vec<(Option<String>, Expr)> },
 
-    /// Access a property on an object eg: `user.name`
+    /// Access a property on an object. eg: `user.name`
     MemberAccess { object: Box<Expr>, property: String },
 
-    /// Reading from an array. (List[0])
-    Index { array: Box<Expr>, index: Box<Expr> },
+    /// Reading from a list. eg: `list[0]`
+    Index { list: Box<Expr>, index: Box<Expr> },
 
-    /// List
-    Array(Vec<Expr>),
+    /// A list literal. eg: `[1, 2, 3]`
+    List(Vec<Expr>),
 
-    /// Map
+    /// A map literal. eg: `{"key": 42}`
     Map(Vec<(Expr, Expr)>),
 
-    /// A string with variables eg: `"Hello ${user.name}"`
-    InterpolatedString(Vec<Expr>),
+    /// A string with embedded expressions. eg: `"Hello ${user.name}"`
+    InterpolatedString(Vec<StringSegment>),
 
-    /// Instantiating a struct in memory. `User { name: "Jack Sparrow" }`
+    /// Instantiating a struct in memory. eg: `User { name: "Jack Sparrow" }`
     StructInit {
         name: Box<Expr>,
         fields: Vec<(String, Expr)>,
     },
 
-    ///Switch
-    Switch { target: Box<Expr>, arms: Vec<(Expr, Expr)>, default_arm: Box<Expr> },
+    /// A pattern-matching expression.
+    /// eg: `switch status { Active -> 1, Pending -> 0, default -> -1 }`
+    Switch {
+        target: Box<Expr>,
+        arms: Vec<(Expr, Expr)>,
+        default_arm: Box<Expr>,
+    },
 
-    /// A group of statements that optionally resolves to a value via `Yield`.
-    ///eg: `{ var x = 10; yield x * 2; }`
+    /// A group of statements that optionally resolves to a value via `yield`.
+    /// eg: `{ var x = 10; yield x * 2; }`
     Block(Vec<Stmt>),
+
+    /// The `?` postfix operator. Propagates errors upward.
+    /// eg: `divide(10, 0)?`
+    PropagateError(Box<Expr>),
+
+    /// The `or { }` fallback block. Handles a failable expression.
+    /// eg: `divide(10, 0) or { yield 0; }`
+    OrFallback {
+        try_expr: Box<Expr>,
+        error_binding: Option<String>,  // Some("e") for `or (e) {`, None for `or {`
+
+        fallback: Box<Expr>,
+    },
+
+    /// The built-in Error constructor.
+    /// eg: `Error(#NotFound, "Item does not exist")`
+    Error {
+        code: String,
+        message: Box<Expr>,
+    },
 }
 
-// STATEMENTS
 /// Represents a distinct action or control flow step.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
-    /// Variable Declaration.
+    /// Variable or constant declaration.
+    /// eg: `var x: Int = 5;` or `const PI = 3.14;`
     VarDecl {
         is_const: bool,
         name: String,
@@ -107,42 +139,55 @@ pub enum Stmt {
         initializer: Option<Expr>,
     },
 
-    /// Assignment.
+    /// An assignment to an existing location.
+    /// eg: `x = 5;`, `user.name = "Stark";`, `list[0] += 1;`
     Assignment {
         target: AssignTarget,
         operator: Token,
         value: Expr,
     },
 
-    /// Expression executing just for function without . so we don't use returned data.
+    /// An expression used as a statement (e.g. a function call whose return value is discarded).
     Expression(Expr),
 
-    /// IF/ELSE
+    /// An if/else branch.
     If {
         condition: Expr,
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
     },
 
-    /// While Loop
+    /// A while loop.
     While {
         condition: Expr,
         body: Box<Stmt>,
     },
 
+    /// A for-each loop. eg: `for item in list { ... }`
+    For {
+        item_name: String,
+        iterator: Expr,
+        body: Box<Stmt>,
+    },
+
     /// Immediately exits the current loop.
     Break,
+
     /// Skips to the next iteration of the current loop.
     Continue,
-    /// Return
+
+    /// Returns a value (or nothing) from the current function.
     Return(Option<Expr>),
-    /// Exits the current Block Expression and returns a value to the outer scope.
+
+    /// Exits the current Block expression and produces a value.
+    /// eg: `yield x * 2;`
     Yield(Expr),
-    /// Schedules a statement to run at the end of the current scope.
+
+    /// Schedules a statement to run when the current scope exits.
+    /// eg: `defer file.close();`
     Defer(Box<Stmt>),
 }
 
-// TOP-LEVEL
 /// A parameter inside a function definition.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Parameter {
@@ -151,41 +196,31 @@ pub struct Parameter {
     pub default_value: Option<Expr>,
 }
 
-/// A property defined inside a Struct blueprint.
+/// A field defined inside a Struct blueprint.
 #[derive(Debug, PartialEq, Clone)]
 pub struct StructField {
+    pub directives: Vec<String>,
     pub is_pub: bool,
     pub name: String,
     pub type_name: Type,
 }
 
-///Function. Extracted into its own struct so it
-/// can be shared securely between standalone functions and Impl blocks.
+/// A function declaration. Shared between top-level functions and impl blocks.
 #[derive(Debug, PartialEq, Clone)]
 pub struct FunctionDecl {
-    /// eg: @depricated
+    /// Directives applied to this function. eg: `@deprecated`
     pub directives: Vec<String>,
-
     pub is_pub: bool,
-
-    /// The name of the function.
     pub name: String,
-
-    /// The input parameters.
     pub parameters: Vec<Parameter>,
-
-    /// The return type.
     pub return_type: Option<Type>,
-
-    /// Code inside the function.
     pub body: Vec<Stmt>,
 }
 
-/// An Item is a top-level declaration. It is the outer shell of the program.
-/// We cannot put a `struct` or a `fn` inside a `while` loop; they live here.
+/// A top-level declaration. The outer shell of the program.
+/// Functions, structs, enums, and impls can only live here.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Item {
-    /// The Struct
     Struct {
         directives: Vec<String>,
         is_pub: bool,
@@ -193,7 +228,6 @@ pub enum Item {
         fields: Vec<StructField>,
     },
 
-    /// Simple Enum
     Enum {
         directives: Vec<String>,
         is_pub: bool,
@@ -201,18 +235,15 @@ pub enum Item {
         values: Vec<String>,
     },
 
-    /// Function Declaration
     Function(FunctionDecl),
 
     /// Attaches methods to a struct.
     Impl {
-        /// The struct this implementation belongs to.
         target: String,
-        /// The methods attached to the struct.
         methods: Vec<FunctionDecl>,
     },
 
-    /// Renames a type for convenience. eg: `type Port = Int;`
+    /// A type alias. eg: `type Port = Int;`
     TypeAlias {
         directives: Vec<String>,
         is_pub: bool,
@@ -220,15 +251,14 @@ pub enum Item {
         target_type: Type,
     },
 
-    /// Imports code from other modules.
+    /// An import declaration. eg: `use net::http::{Request, Response};`
     Use {
-        /// Stored as a path array.
         path: Vec<String>,
+        items: Vec<String>,
     },
 }
 
-/// The root node of every single Antimatter file.
-/// The Parser will read a text file and output exactly one `Program`.
+/// The root node of every Antimatter source file.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Program {
     pub items: Vec<Item>,
