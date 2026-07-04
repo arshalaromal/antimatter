@@ -851,7 +851,6 @@ impl Parser {
             Token::OrKw => {
                 let error_binding = if self.match_tokens(&[Token::LParen]) {
                     let name = self.consume_ident("Expected error variable name")?;
-                    // Guard against or (a, b).only one binding allowed.
                     if self.check(&Token::Comma) {
                         let (line, col) = self.current_pos();
                         return Err(CompilerError::new(
@@ -865,8 +864,15 @@ impl Parser {
                 } else {
                     None
                 };
-                self.consume(Token::LBrace, "Expected '{' after 'or'")?;
-                let fallback = Expr::Block(self.parse_block()?);
+
+                let fallback = if self.check(&Token::LBrace) {
+                    self.advance();
+                    Expr::Block(self.parse_block()?)
+                } else {
+                    let expr = self.parse_expr(Precedence::None)?;
+                    Expr::Block(vec![Stmt::Yield(expr)])
+                };
+
                 Ok(Expr::OrFallback {
                     try_expr: Box::new(left),
                     error_binding,
