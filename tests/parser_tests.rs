@@ -42,9 +42,9 @@ fn parse_type_src(ty_src: &str) -> Type {
     let prog = parse(&wrapped);
     match &prog.items[0] {
         Item::Function(f) => match &f.body[0] {
-            Stmt::VarDecl { type_annotation, .. } => {
-                type_annotation.clone().expect("Expected a type annotation")
-            }
+            Stmt::VarDecl {
+                type_annotation, ..
+            } => type_annotation.clone().expect("Expected a type annotation"),
             other => panic!("Expected VarDecl, got {:?}", other),
         },
         _ => panic!("Expected function"),
@@ -112,7 +112,10 @@ fn test_multiple_directives_order() {
     let prog = parse("@deprecated @experimental pub fn risky() { }");
     match &prog.items[0] {
         Item::Function(f) => {
-            assert_eq!(f.directives, vec!["deprecated".to_string(), "experimental".to_string()]);
+            assert_eq!(
+                f.directives,
+                vec!["deprecated".to_string(), "experimental".to_string()]
+            );
         }
         _ => panic!("Expected function"),
     }
@@ -124,7 +127,12 @@ fn test_var_decl_with_type_and_value() {
     let prog = parse("fn _t() { var x: Int = 42; }");
     match &prog.items[0] {
         Item::Function(f) => match &f.body[0] {
-            Stmt::VarDecl { is_const, name, type_annotation, initializer } => {
+            Stmt::VarDecl {
+                is_const,
+                name,
+                type_annotation,
+                initializer,
+            } => {
                 assert!(!is_const);
                 assert_eq!(name, "x");
                 assert_eq!(*type_annotation, Some(Type::Basic("Int".to_string())));
@@ -165,30 +173,36 @@ fn test_var_decl_type_only_no_initializer() {
 fn test_precedence_mul_over_add() {
     // 2 + 3 * 4  must parse as  2 + (3 * 4)
     let expr = parse_expr_src("2 + 3 * 4");
-    assert_eq!(expr, Expr::Binary {
-        left: Box::new(Expr::Literal(Literal::Int(2))),
-        operator: Token::Plus,
-        right: Box::new(Expr::Binary {
-            left: Box::new(Expr::Literal(Literal::Int(3))),
-            operator: Token::Star,
-            right: Box::new(Expr::Literal(Literal::Int(4))),
-        }),
-    });
+    assert_eq!(
+        expr,
+        Expr::Binary {
+            left: Box::new(Expr::Literal(Literal::Int(2))),
+            operator: Token::Plus,
+            right: Box::new(Expr::Binary {
+                left: Box::new(Expr::Literal(Literal::Int(3))),
+                operator: Token::Star,
+                right: Box::new(Expr::Literal(Literal::Int(4))),
+            }),
+        }
+    );
 }
 
 #[test]
 fn test_left_associativity_subtraction() {
     // 5 - 3 - 1  must parse as  (5 - 3) - 1,  Not  5 - (3 - 1)
     let expr = parse_expr_src("5 - 3 - 1");
-    assert_eq!(expr, Expr::Binary {
-        left: Box::new(Expr::Binary {
-            left: Box::new(Expr::Literal(Literal::Int(5))),
+    assert_eq!(
+        expr,
+        Expr::Binary {
+            left: Box::new(Expr::Binary {
+                left: Box::new(Expr::Literal(Literal::Int(5))),
+                operator: Token::Minus,
+                right: Box::new(Expr::Literal(Literal::Int(3))),
+            }),
             operator: Token::Minus,
-            right: Box::new(Expr::Literal(Literal::Int(3))),
-        }),
-        operator: Token::Minus,
-        right: Box::new(Expr::Literal(Literal::Int(1))),
-    });
+            right: Box::new(Expr::Literal(Literal::Int(1))),
+        }
+    );
 }
 
 #[test]
@@ -196,8 +210,15 @@ fn test_left_associativity_division() {
     // 8 / 4 / 2  must be  (8 / 4) / 2,  not  8 / (4 / 2)
     let expr = parse_expr_src("8 / 4 / 2");
     match expr {
-        Expr::Binary { left, operator: Token::Slash, .. } => match *left {
-            Expr::Binary { operator: Token::Slash, .. } => {}
+        Expr::Binary {
+            left,
+            operator: Token::Slash,
+            ..
+        } => match *left {
+            Expr::Binary {
+                operator: Token::Slash,
+                ..
+            } => {}
             _ => panic!("Division must be left-associative"),
         },
         _ => panic!("Expected binary"),
@@ -207,36 +228,52 @@ fn test_left_associativity_division() {
 #[test]
 fn test_unary_minus() {
     let expr = parse_expr_src("-13");
-    assert_eq!(expr, Expr::Unary {
-        operator: Token::Minus,
-        right: Box::new(Expr::Literal(Literal::Int(13))),
-    });
+    assert_eq!(
+        expr,
+        Expr::Unary {
+            operator: Token::Minus,
+            right: Box::new(Expr::Literal(Literal::Int(13))),
+        }
+    );
 }
 
 #[test]
 fn test_unary_not() {
     let expr = parse_expr_src("!active");
-    assert_eq!(expr, Expr::Unary {
-        operator: Token::Not,
-        right: Box::new(Expr::Identifier("active".to_string())),
-    });
+    assert_eq!(
+        expr,
+        Expr::Unary {
+            operator: Token::Not,
+            right: Box::new(Expr::Identifier("active".to_string())),
+        }
+    );
 }
 
 #[test]
 fn test_unary_bitnot() {
     let expr = parse_expr_src("~mask");
-    assert_eq!(expr, Expr::Unary {
-        operator: Token::BitNot,
-        right: Box::new(Expr::Identifier("mask".to_string())),
-    });
+    assert_eq!(
+        expr,
+        Expr::Unary {
+            operator: Token::BitNot,
+            right: Box::new(Expr::Identifier("mask".to_string())),
+        }
+    );
 }
 
 #[test]
 fn test_grouping_overrides_precedence() {
     let expr = parse_expr_src("(2 + 3) * 4");
     match expr {
-        Expr::Binary { operator: Token::Star, left, .. } => match *left {
-            Expr::Binary { operator: Token::Plus, .. } => {}
+        Expr::Binary {
+            operator: Token::Star,
+            left,
+            ..
+        } => match *left {
+            Expr::Binary {
+                operator: Token::Plus,
+                ..
+            } => {}
             _ => panic!("Expected addition inside grouping"),
         },
         _ => panic!("Expected multiplication at top"),
@@ -248,8 +285,15 @@ fn test_and_over_or_precedence() {
     // a || b && c  must be  a || (b && c)
     let expr = parse_expr_src("a || b && c");
     match expr {
-        Expr::Binary { operator: Token::Or, right, .. } => match *right {
-            Expr::Binary { operator: Token::And, .. } => {}
+        Expr::Binary {
+            operator: Token::Or,
+            right,
+            ..
+        } => match *right {
+            Expr::Binary {
+                operator: Token::And,
+                ..
+            } => {}
             _ => panic!("Expected && nested under ||"),
         },
         _ => panic!("Expected || at top"),
@@ -261,8 +305,15 @@ fn test_bitand_over_bitor_precedence() {
     // a | b & c  must be  a | (b & c)
     let expr = parse_expr_src("a | b & c");
     match expr {
-        Expr::Binary { operator: Token::BitOr, right, .. } => match *right {
-            Expr::Binary { operator: Token::BitAnd, .. } => {}
+        Expr::Binary {
+            operator: Token::BitOr,
+            right,
+            ..
+        } => match *right {
+            Expr::Binary {
+                operator: Token::BitAnd,
+                ..
+            } => {}
             _ => panic!("Expected & nested under |"),
         },
         _ => panic!("Expected | at top"),
@@ -274,9 +325,20 @@ fn test_bitxor_between_bitor_and_bitand() {
     // a | b ^ c & d  must be  a | (b ^ (c & d))
     let expr = parse_expr_src("a | b ^ c & d");
     match expr {
-        Expr::Binary { operator: Token::BitOr, right, .. } => match *right {
-            Expr::Binary { operator: Token::BitXor, right: xor_right, .. } => match *xor_right {
-                Expr::Binary { operator: Token::BitAnd, .. } => {}
+        Expr::Binary {
+            operator: Token::BitOr,
+            right,
+            ..
+        } => match *right {
+            Expr::Binary {
+                operator: Token::BitXor,
+                right: xor_right,
+                ..
+            } => match *xor_right {
+                Expr::Binary {
+                    operator: Token::BitAnd,
+                    ..
+                } => {}
                 _ => panic!("Expected & nested under ^"),
             },
             _ => panic!("Expected ^ nested under |"),
@@ -290,8 +352,15 @@ fn test_term_over_shift_precedence() {
     // a << 1 + 2  must be  a << (1 + 2)
     let expr = parse_expr_src("a << 1 + 2");
     match expr {
-        Expr::Binary { operator: Token::Shl, right, .. } => match *right {
-            Expr::Binary { operator: Token::Plus, .. } => {}
+        Expr::Binary {
+            operator: Token::Shl,
+            right,
+            ..
+        } => match *right {
+            Expr::Binary {
+                operator: Token::Plus,
+                ..
+            } => {}
             _ => panic!("Expected + nested under <<"),
         },
         _ => panic!("Expected << at top"),
@@ -303,8 +372,15 @@ fn test_comparison_over_equality_precedence() {
     // a == b < c  must be  a == (b < c)
     let expr = parse_expr_src("a == b < c");
     match expr {
-        Expr::Binary { operator: Token::EqEq, right, .. } => match *right {
-            Expr::Binary { operator: Token::Lt, .. } => {}
+        Expr::Binary {
+            operator: Token::EqEq,
+            right,
+            ..
+        } => match *right {
+            Expr::Binary {
+                operator: Token::Lt,
+                ..
+            } => {}
             _ => panic!("Expected < nested under =="),
         },
         _ => panic!("Expected == at top"),
@@ -317,8 +393,15 @@ fn test_comparison_left_associative() {
     // This is purely a parser associativity check.
     let expr = parse_expr_src("a < b < c");
     match expr {
-        Expr::Binary { operator: Token::Lt, left, .. } => match *left {
-            Expr::Binary { operator: Token::Lt, .. } => {}
+        Expr::Binary {
+            operator: Token::Lt,
+            left,
+            ..
+        } => match *left {
+            Expr::Binary {
+                operator: Token::Lt,
+                ..
+            } => {}
             _ => panic!("Expected left-nested comparison"),
         },
         _ => panic!("Expected comparison at top"),
@@ -355,8 +438,13 @@ fn test_else_if_chain() {
     let prog = parse("fn _t() { if a { } else if b { } else { } }");
     match &prog.items[0] {
         Item::Function(f) => match &f.body[0] {
-            Stmt::If { else_branch: Some(eb), .. } => match **eb {
-                Stmt::If { ref else_branch, .. } => assert!(else_branch.is_some()),
+            Stmt::If {
+                else_branch: Some(eb),
+                ..
+            } => match **eb {
+                Stmt::If {
+                    ref else_branch, ..
+                } => assert!(else_branch.is_some()),
                 _ => panic!("Expected nested If for 'else if'"),
             },
             _ => panic!("Expected If with else branch"),
@@ -497,7 +585,14 @@ fn test_enum_definition() {
     match &prog.items[0] {
         Item::Enum { name, values, .. } => {
             assert_eq!(name, "Status");
-            assert_eq!(values, &vec!["Active".to_string(), "Pending".to_string(), "Closed".to_string()]);
+            assert_eq!(
+                values,
+                &vec![
+                    "Active".to_string(),
+                    "Pending".to_string(),
+                    "Closed".to_string()
+                ]
+            );
         }
         _ => panic!("Expected Enum"),
     }
@@ -530,7 +625,9 @@ fn test_impl_block_multiple_methods() {
 fn test_type_alias() {
     let prog = parse("type Port = Int;");
     match &prog.items[0] {
-        Item::TypeAlias { name, target_type, .. } => {
+        Item::TypeAlias {
+            name, target_type, ..
+        } => {
             assert_eq!(name, "Port");
             assert_eq!(*target_type, Type::Basic("Int".to_string()));
         }
@@ -590,14 +687,19 @@ fn test_basic_type() {
 
 #[test]
 fn test_list_type() {
-    assert_eq!(parse_type_src("[Int]"), Type::List(Box::new(Type::Basic("Int".to_string()))));
+    assert_eq!(
+        parse_type_src("[Int]"),
+        Type::List(Box::new(Type::Basic("Int".to_string())))
+    );
 }
 
 #[test]
 fn test_nested_list_type() {
     assert_eq!(
         parse_type_src("[[Int]]"),
-        Type::List(Box::new(Type::List(Box::new(Type::Basic("Int".to_string())))))
+        Type::List(Box::new(Type::List(Box::new(Type::Basic(
+            "Int".to_string()
+        )))))
     );
 }
 
@@ -617,7 +719,10 @@ fn test_function_type() {
     assert_eq!(
         parse_type_src("fn(Int, String) -> Bool"),
         Type::Function {
-            parameters: vec![Type::Basic("Int".to_string()), Type::Basic("String".to_string())],
+            parameters: vec![
+                Type::Basic("Int".to_string()),
+                Type::Basic("String".to_string())
+            ],
             return_type: Box::new(Type::Basic("Bool".to_string())),
         }
     );
@@ -635,7 +740,9 @@ fn test_failable_type() {
 fn test_failable_list_type() {
     assert_eq!(
         parse_type_src("![Int]"),
-        Type::Failable(Box::new(Type::List(Box::new(Type::Basic("Int".to_string())))))
+        Type::Failable(Box::new(Type::List(Box::new(Type::Basic(
+            "Int".to_string()
+        )))))
     );
 }
 
@@ -674,7 +781,11 @@ fn test_simple_assignment_stmt() {
     let prog = parse("fn _t() { x = 5; }");
     match &prog.items[0] {
         Item::Function(f) => match &f.body[0] {
-            Stmt::Assignment { target, operator, value } => {
+            Stmt::Assignment {
+                target,
+                operator,
+                value,
+            } => {
                 assert_eq!(*target, AssignTarget::Identifier("x".to_string()));
                 assert_eq!(*operator, Token::Assign);
                 assert_eq!(*value, Expr::Literal(Literal::Int(5)));
@@ -797,7 +908,10 @@ fn test_struct_init_nested() {
 fn test_or_block_no_binding() {
     let expr = parse_expr_src("divide(a, b) or { yield 0; }");
     match expr {
-        Expr::OrFallback { error_binding: None, .. } => {}
+        Expr::OrFallback {
+            error_binding: None,
+            ..
+        } => {}
         _ => panic!("Expected OrFallback with no binding"),
     }
 }
@@ -806,8 +920,78 @@ fn test_or_block_no_binding() {
 fn test_or_block_with_binding() {
     let expr = parse_expr_src("divide(a, b) or (e) { yield 0; }");
     match expr {
-        Expr::OrFallback { error_binding: Some(name), .. } => assert_eq!(name, "e"),
+        Expr::OrFallback {
+            error_binding: Some(name),
+            ..
+        } => assert_eq!(name, "e"),
         _ => panic!("Expected OrFallback with binding 'e'"),
+    }
+}
+
+#[test]
+fn test_or_inline_literal() {
+    // fallback must desugar to Block([Yield(Literal(Int(0)))])
+    let expr = parse_expr_src("divide(a, b) or 0");
+    match expr {
+        Expr::OrFallback {
+            fallback,
+            ..
+        } => match *fallback {
+            Expr::Block(stmts) => {
+                assert_eq!(stmts.len(), 1);
+                match &stmts[0] {
+                    Stmt::Yield(Expr::Literal(Literal::Int(0))) => {}
+                    other => panic!("Expected Yield(Int(0)), got {:?}", other),
+                }
+            }
+            other => panic!("Expected Block, got {:?}", other),
+        },
+        other => panic!("Expected OrFallback, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_or_inline_variable() {
+    let expr = parse_expr_src("divide(a, b) or default_val");
+    match expr {
+        Expr::OrFallback { fallback, .. } => match *fallback {
+            Expr::Block(stmts) => match &stmts[0] {
+                Stmt::Yield(Expr::Identifier(name)) => assert_eq!(name, "default_val"),
+                other => panic!("Expected Yield(Identifier), got {:?}", other),
+            },
+            other => panic!("Expected Block, got {:?}", other),
+        },
+        other => panic!("Expected OrFallback, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_or_inline_with_binding() {
+    let expr = parse_expr_src("divide(a, b) or (e) 0");
+    match expr {
+        Expr::OrFallback {
+            error_binding: Some(name),
+            ..
+        } => assert_eq!(name, "e"),
+        other => panic!("Expected OrFallback with binding, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_or_inline_complex_expr() {
+    let expr = parse_expr_src("divide(a, b) or a + b");
+    match expr {
+        Expr::OrFallback { fallback, .. } => match *fallback {
+            Expr::Block(stmts) => match &stmts[0] {
+                Stmt::Yield(Expr::Binary {
+                                operator: Token::Plus,
+                                ..
+                            }) => {}
+                other => panic!("Expected Yield(Binary(+)), got {:?}", other),
+            },
+            other => panic!("Expected Block, got {:?}", other),
+        },
+        other => panic!("Expected OrFallback, got {:?}", other),
     }
 }
 
@@ -826,7 +1010,10 @@ fn test_error_primitive() {
     match expr {
         Expr::Error { code, message } => {
             assert_eq!(code, "NotFound");
-            assert_eq!(*message, Expr::Literal(Literal::String("Item missing".to_string())));
+            assert_eq!(
+                *message,
+                Expr::Literal(Literal::String("Item missing".to_string()))
+            );
         }
         _ => panic!("Expected Error Type"),
     }
@@ -837,7 +1024,10 @@ fn test_error_returned_from_failable_function() {
     let prog = parse(r#"fn f() -> !Int { return Error(#Bad, "bad"); }"#);
     match &prog.items[0] {
         Item::Function(f) => {
-            assert_eq!(f.return_type, Some(Type::Failable(Box::new(Type::Basic("Int".to_string())))));
+            assert_eq!(
+                f.return_type,
+                Some(Type::Failable(Box::new(Type::Basic("Int".to_string()))))
+            );
             match &f.body[0] {
                 Stmt::Return(Some(Expr::Error { code, .. })) => assert_eq!(code, "Bad"),
                 _ => panic!("Expected Return(Error(...))"),
@@ -1000,7 +1190,10 @@ fn test_interpolated_string_to_ast() {
         Expr::InterpolatedString(segments) => {
             assert_eq!(segments.len(), 3);
             assert_eq!(segments[0], StringSegment::Literal("Hello ".to_string()));
-            assert_eq!(segments[1], StringSegment::Expr(Box::new(Expr::Identifier("name".to_string()))));
+            assert_eq!(
+                segments[1],
+                StringSegment::Expr(Box::new(Expr::Identifier("name".to_string())))
+            );
             assert_eq!(segments[2], StringSegment::Literal("!".to_string()));
         }
         _ => panic!("Expected InterpolatedString"),
@@ -1025,7 +1218,10 @@ fn test_interpolated_string_with_member_access() {
 #[test]
 fn test_plain_string_is_not_interpolated() {
     let expr = parse_expr_src(r#""no interpolation here""#);
-    assert_eq!(expr, Expr::Literal(Literal::String("no interpolation here".to_string())));
+    assert_eq!(
+        expr,
+        Expr::Literal(Literal::String("no interpolation here".to_string()))
+    );
 }
 
 // ERROR
