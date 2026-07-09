@@ -1,4 +1,4 @@
-<div align="center"> <img src="assets/logo.svg" alt="Antimatter Logo" width="60%"/>
+<div align="center"> <img src="assets/logo.svg" alt="Antimatter Logo" style="max-width: 100%; height: auto;"/>
 
 <p> A high-performance systems programming language focused on simplicity, Mutable Value Semantics, and Copy-on-Write memory management. </p> </div>
 
