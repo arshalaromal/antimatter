@@ -1,6 +1,6 @@
-# The Antimatter Programming Language
+<div align="center"> <img src="assets/logo.svg" alt="Antimatter Logo" style="max-width: 100%; height: auto;"/>
 
-A high-performance systems programming language focused on **simplicity**, **Mutable Value Semantics**, **Copy-on-Write (CoW)** memory management, and a new approach to **error handling**.
+<p> A high-performance systems programming language focused on simplicity, Mutable Value Semantics, and Copy-on-Write memory management. </p> </div>
 
 ## Status
 
