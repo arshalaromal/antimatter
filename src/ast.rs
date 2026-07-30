@@ -19,6 +19,8 @@ pub enum Type {
     },
     /// Wraps ANY type in a failable state. e.g., `![Int]` or `!{String: Int}`
     Failable(Box<Type>),
+    Void,
+    ECode,
 }
 
 /// Represents the raw datatypes which are hardcoded into Antimatter.
@@ -58,6 +60,8 @@ pub enum Expr {
     /// Normal core data types.
     Literal(Literal),
 
+    ECodeLit(String),
+
     /// A named variable reference.
     Identifier(String),
 
@@ -72,6 +76,12 @@ pub enum Expr {
 
     /// Executing a function. eg: `process(val, secure=true)`
     Call { callee: Box<Expr>, arguments: Vec<(Option<String>, Expr)> },
+
+    /// An enum variant. eg: `Status::Active`
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+    },
 
     /// Access a property on an object. eg: `user.name`
     MemberAccess { object: Box<Expr>, property: String },
@@ -90,7 +100,7 @@ pub enum Expr {
 
     /// Instantiating a struct in memory. eg: `User { name: "Jack Sparrow" }`
     StructInit {
-        name: Box<Expr>,
+        name: String,
         fields: Vec<(String, Expr)>,
     },
 
