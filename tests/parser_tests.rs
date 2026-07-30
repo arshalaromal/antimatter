@@ -872,7 +872,7 @@ fn test_struct_init_expression() {
     let expr = parse_expr_src(r#"User { name: "John", age: 522 }"#);
     match expr {
         Expr::StructInit { name, fields } => {
-            assert_eq!(*name, Expr::Identifier("User".to_string()));
+            assert_eq!(*name, "User".to_string());
             assert_eq!(fields.len(), 2);
             assert_eq!(fields[0].0, "name");
             assert_eq!(fields[1].0, "age");
@@ -1301,5 +1301,164 @@ fn test_parser_does_not_panic_on_empty_input_after_partial_program() {
 #[test]
 fn test_lexer_error_propagates_through_try_parse() {
     let result = try_parse("fn _t() { var x = $; }");
+    assert!(result.is_err());
+}
+
+
+// ENUM VARIANT EXPRESSIONS
+
+#[test]
+fn test_enum_variant_parses() {
+    let expr = parse_expr_src("Status::Active");
+    match expr {
+        Expr::EnumVariant { enum_name, variant } => {
+            assert_eq!(enum_name, "Status");
+            assert_eq!(variant, "Active");
+        }
+        _ => panic!("Expected EnumVariant, got {:?}", expr),
+    }
+}
+
+#[test]
+fn test_enum_variant_in_switch_arm() {
+    let expr = parse_expr_src("switch status { Status::Active -> 1, default -> 0 }");
+    match expr {
+        Expr::Switch { arms, .. } => {
+            assert_eq!(arms.len(), 1);
+            match &arms[0].0 {
+                Expr::EnumVariant { enum_name, variant } => {
+                    assert_eq!(enum_name, "Status");
+                    assert_eq!(variant, "Active");
+                }
+                _ => panic!("Expected EnumVariant as switch arm pattern"),
+            }
+        }
+        _ => panic!("Expected Switch"),
+    }
+}
+
+#[test]
+fn test_enum_variant_in_var_decl() {
+    let prog = parse("fn _t() { var s = Status::Active; }");
+    match &prog.items[0] {
+        Item::Function(f) => match &f.body[0] {
+            Stmt::VarDecl { initializer: Some(expr), .. } => match expr {
+                Expr::EnumVariant { enum_name, variant } => {
+                    assert_eq!(enum_name, "Status");
+                    assert_eq!(variant, "Active");
+                }
+                _ => panic!("Expected EnumVariant initializer"),
+            },
+            _ => panic!("Expected VarDecl"),
+        },
+        _ => panic!("Expected function"),
+    }
+}
+
+#[test]
+fn test_enum_variant_in_comparison() {
+    // Status::Active == Status::Pending
+    let expr = parse_expr_src("Status::Active == Status::Pending");
+    match expr {
+        Expr::Binary { operator: Token::EqEq, left, right } => {
+            match *left {
+                Expr::EnumVariant { variant, .. } => assert_eq!(variant, "Active"),
+                _ => panic!("Expected EnumVariant on left"),
+            }
+            match *right {
+                Expr::EnumVariant { variant, .. } => assert_eq!(variant, "Pending"),
+                _ => panic!("Expected EnumVariant on right"),
+            }
+        }
+        _ => panic!("Expected Binary =="),
+    }
+}
+
+#[test]
+fn test_double_colon_left_must_be_identifier() {
+    // 5::Active is nonsense - left side of :: must be a plain name
+    let result = try_parse("fn _t() { var x = 5::Active; }");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_double_colon_on_call_result_is_error() {
+    // get_status()::Active — left side is a call, not an identifier
+    let result = try_parse("fn _t() { var x = get_status()::Active; }");
+    assert!(result.is_err());
+}
+
+
+// ECODE LITERALS (#NotFound)
+#[test]
+fn test_ecode_literal_standalone() {
+    let expr = parse_expr_src("#NotFound");
+    match expr {
+        Expr::ECodeLit(code) => assert_eq!(code, "NotFound"),
+        _ => panic!("Expected ECodeLit, got {:?}", expr),
+    }
+}
+
+#[test]
+fn test_ecode_literal_in_equality() {
+    // comparing e.code against a known code
+    let expr = parse_expr_src("e.code == #NotFound");
+    match expr {
+        Expr::Binary { operator: Token::EqEq, right, .. } => match *right {
+            Expr::ECodeLit(code) => assert_eq!(code, "NotFound"),
+            _ => panic!("Expected ECodeLit on right side"),
+        },
+        _ => panic!("Expected Binary =="),
+    }
+}
+
+#[test]
+fn test_ecode_literal_in_if_condition() {
+    let prog = parse(r#"
+        fn _t() {
+            divide(a, b) or (e) {
+                if e.code == #ZeroDivision { yield 0; }
+                yield 1;
+            };
+        }
+    "#);
+    // Just check it parses without error
+    assert_eq!(prog.items.len(), 1);
+}
+
+#[test]
+fn test_ecode_literal_different_codes() {
+    let expr = parse_expr_src("#ZeroDivision");
+    match expr {
+        Expr::ECodeLit(code) => assert_eq!(code, "ZeroDivision"),
+        _ => panic!("Expected ECodeLit"),
+    }
+}
+
+#[test]
+fn test_ecode_in_error_constructor_is_separate() {
+    let expr = parse_expr_src(r#"Error(#NotFound, "item missing")"#);
+    match expr {
+        Expr::Error { code, .. } => assert_eq!(code, "NotFound"),
+        _ => panic!("Expected Error"),
+    }
+}
+
+// !!T REJECTION
+#[test]
+fn test_double_failable_is_rejected() {
+    let result = try_parse("fn _t() { var x: !!Int; }");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_double_failable_list_is_rejected() {
+    let result = try_parse("fn _t() { var x: !![Int]; }");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_double_failable_in_return_type_is_rejected() {
+    let result = try_parse("fn f() -> !!Int { }");
     assert!(result.is_err());
 }
