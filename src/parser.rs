@@ -334,8 +334,13 @@ impl Parser {
             return_type = Some(self.parse_type()?);
         }
 
-        self.consume(Token::LBrace, "Expected '{' before function body")?;
-        let body = self.parse_block()?;
+        let body = if directives.contains(&"extern".to_string()) {
+            self.consume(Token::SemiColon, "Expected ';' after @extern function declaration")?;
+            vec![]
+        } else {
+            self.consume(Token::LBrace, "Expected '{' before function body")?;
+            self.parse_block()?
+        };
 
         Ok(FunctionDecl {
             directives,
@@ -368,7 +373,16 @@ impl Parser {
     fn parse_type(&mut self) -> CompilerResult<Type> {
         // Failable wrapper: `!Type`
         if self.match_tokens(&[Token::Not]) {
-            return Ok(Type::Failable(Box::new(self.parse_type()?)));
+            let inner = self.parse_type()?;
+            if matches!(inner, Type::Failable(_)) {
+                let (line, col) = self.current_pos();
+                return Err(CompilerError::new(
+                    line,
+                    col,
+                    "Redundant '!' — type is already failable. Write '!T', not '!!T'.".to_string(),
+                ));
+            }
+            return Ok(Type::Failable(Box::new(inner)));
         }
         // List type: `[Int]`
         if self.match_tokens(&[Token::LBracket]) {
@@ -410,9 +424,12 @@ impl Parser {
             });
         }
         // Named type: `Int`, `String`, `Struct`
-        Ok(Type::Basic(
-            self.consume_ident("Expected a valid type name")?,
-        ))
+        let name = self.consume_ident("Expected a valid type name")?;
+        match name.as_str() {
+            "Void" => Ok(Type::Void),
+            "ECode" => Ok(Type::ECode),
+            _ => Ok(Type::Basic(name)),
+        }
     }
 
     //STATEMENT PARSER
@@ -628,7 +645,9 @@ impl Parser {
             Token::Shl | Token::Shr => Precedence::Shift,
             Token::Plus | Token::Minus => Precedence::Term,
             Token::Star | Token::Slash | Token::Percent => Precedence::Factor,
-            Token::LParen | Token::Dot | Token::LBracket | Token::Question => Precedence::Call,
+            Token::LParen | Token::Dot | Token::LBracket | Token::Question | Token::DoubleColon => {
+                Precedence::Call
+            }
             _ => Precedence::None,
         }
     }
@@ -698,6 +717,10 @@ impl Parser {
 
             //Error constructor
             Token::Error => self.parse_error_primitive(),
+            Token::Hash => {
+                let code = self.consume_ident("Expected error code name after '#'")?;
+                Ok(Expr::ECodeLit(code))
+            }
 
             //Identifier or struct init
             Token::Ident(name) => {
@@ -847,6 +870,22 @@ impl Parser {
             //Error propagation postfix
             Token::Question => Ok(Expr::PropagateError(Box::new(left))),
 
+            // ::
+            Token::DoubleColon => {
+                let variant = self.consume_ident("Expected enum variant name after '::'")?;
+                match left {
+                    Expr::Identifier(enum_name) => Ok(Expr::EnumVariant { enum_name, variant }),
+                    _ => {
+                        let (line, col) = self.current_pos();
+                        Err(CompilerError::new(
+                            line,
+                            col,
+                            "Left side of '::' must be an enum name".to_string(),
+                        ))
+                    }
+                }
+            }
+
             //`or { }` fallback block
             Token::OrKw => {
                 let error_binding = if self.match_tokens(&[Token::LParen]) {
@@ -924,6 +963,7 @@ impl Parser {
     /// Supports positional `call(1, 2)` and named `call(port=8080)` arguments.
     fn parse_call_arguments(&mut self) -> CompilerResult<Vec<(Option<String>, Expr)>> {
         let mut arguments = Vec::new();
+        let mut saw_named = false;
 
         if !self.check(&Token::RParen) {
             loop {
@@ -933,8 +973,10 @@ impl Parser {
 
                 let mut name = None;
                 let mut value = self.parse_expr(Precedence::None)?;
+
                 if self.match_tokens(&[Token::Assign]) {
                     if let Expr::Identifier(arg_name) = value {
+                        saw_named = true;
                         name = Some(arg_name);
                         value = self.parse_expr(Precedence::None)?;
                     } else {
@@ -946,6 +988,13 @@ impl Parser {
                                 .to_string(),
                         ));
                     }
+                } else if saw_named {
+                    let (line, col) = self.current_pos();
+                    return Err(CompilerError::new(
+                        line,
+                        col,
+                        "Positional argument cannot follow a named argument.".to_string(),
+                    ));
                 }
 
                 arguments.push((name, value));
@@ -958,7 +1007,6 @@ impl Parser {
         self.consume(Token::RParen, "Expected ')' after function arguments")?;
         Ok(arguments)
     }
-
     /// Parses the built-in Error constructor: `Error(#Code, "message")`
     fn parse_error_primitive(&mut self) -> CompilerResult<Expr> {
         self.consume(Token::LParen, "Expected '(' after 'Error'")?;
@@ -996,10 +1044,7 @@ impl Parser {
         }
 
         self.consume(Token::RBrace, "Expected '}' after struct fields")?;
-        Ok(Expr::StructInit {
-            name: Box::new(Expr::Identifier(name)),
-            fields,
-        })
+        Ok(Expr::StructInit { name, fields })
     }
 
     /// Called AFTER the opening `{` has been consumed, so `self.current` points
@@ -1043,7 +1088,7 @@ impl Parser {
                     depth -= 1;
                     if depth == 0 {
                         return false;
-                    } // Exited the outer brace; no colon found.
+                    }
                 }
                 Token::Colon if depth == 1 => return true, // colon -> map
                 Token::SemiColon if depth == 1 => return false, // semicolon -> block

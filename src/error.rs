@@ -11,8 +11,8 @@ pub struct CompilerError {
 }
 
 impl CompilerError {
-    pub fn new(line: usize, column: usize, message: String) -> Self {
-        Self { line, column, message }
+    pub fn new(line: usize, column: usize, message: impl Into<String>) -> Self {
+        Self { line, column, message: message.into() }
     }
 }
 

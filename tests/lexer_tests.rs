@@ -23,14 +23,36 @@ fn try_lex(src: &str) -> Result<Vec<Token>, CompilerError> {
 #[test]
 fn test_keywords() {
     assert_eq!(
-        lex("var const fn return if else while for in pub struct impl enum type use self yield or break continue defer switch default Error true false"),
+        lex(
+            "var const fn return if else while for in pub struct impl enum type use self yield or break continue defer switch default Error true false"
+        ),
         vec![
-            Token::Var, Token::Const, Token::Fn, Token::Return,
-            Token::If, Token::Else, Token::While, Token::For, Token::In,
-            Token::Pub, Token::Struct, Token::Impl, Token::Enum,
-            Token::Type, Token::Use, Token::SelfKw, Token::Yield,
-            Token::OrKw, Token::Break, Token::Continue, Token::Defer,
-            Token::Switch, Token::Default, Token::Error, Token::True, Token::False
+            Token::Var,
+            Token::Const,
+            Token::Fn,
+            Token::Return,
+            Token::If,
+            Token::Else,
+            Token::While,
+            Token::For,
+            Token::In,
+            Token::Pub,
+            Token::Struct,
+            Token::Impl,
+            Token::Enum,
+            Token::Type,
+            Token::Use,
+            Token::SelfKw,
+            Token::Yield,
+            Token::OrKw,
+            Token::Break,
+            Token::Continue,
+            Token::Defer,
+            Token::Switch,
+            Token::Default,
+            Token::Error,
+            Token::True,
+            Token::False
         ]
     );
 }
@@ -39,7 +61,13 @@ fn test_keywords() {
 fn test_arithmetic_operators() {
     assert_eq!(
         lex("+ - * / %"),
-        vec![Token::Plus, Token::Minus, Token::Star, Token::Slash, Token::Percent]
+        vec![
+            Token::Plus,
+            Token::Minus,
+            Token::Star,
+            Token::Slash,
+            Token::Percent
+        ]
     );
 }
 
@@ -47,7 +75,14 @@ fn test_arithmetic_operators() {
 fn test_comparison_operators() {
     assert_eq!(
         lex("== != < > <= >="),
-        vec![Token::EqEq, Token::NotEq, Token::Lt, Token::Gt, Token::LtEq, Token::GtEq]
+        vec![
+            Token::EqEq,
+            Token::NotEq,
+            Token::Lt,
+            Token::Gt,
+            Token::LtEq,
+            Token::GtEq
+        ]
     );
 }
 
@@ -56,9 +91,15 @@ fn test_compound_assignment() {
     assert_eq!(
         lex("+= -= *= /= &= |= ^= <<= >>="),
         vec![
-            Token::PlusEq, Token::MinusEq, Token::StarEq, Token::SlashEq,
-            Token::BitAndEq, Token::BitOrEq, Token::BitXorEq,
-            Token::ShlEq, Token::ShrEq,
+            Token::PlusEq,
+            Token::MinusEq,
+            Token::StarEq,
+            Token::SlashEq,
+            Token::BitAndEq,
+            Token::BitOrEq,
+            Token::BitXorEq,
+            Token::ShlEq,
+            Token::ShrEq,
         ]
     );
 }
@@ -67,7 +108,14 @@ fn test_compound_assignment() {
 fn test_bitwise_operators() {
     assert_eq!(
         lex("& | ^ ~ << >>"),
-        vec![Token::BitAnd, Token::BitOr, Token::BitXor, Token::BitNot, Token::Shl, Token::Shr]
+        vec![
+            Token::BitAnd,
+            Token::BitOr,
+            Token::BitXor,
+            Token::BitNot,
+            Token::Shl,
+            Token::Shr
+        ]
     );
 }
 
@@ -97,10 +145,21 @@ fn test_punctuation() {
     assert_eq!(
         lex("@ -> :: . : ; , ( ) { } [ ] ? #"),
         vec![
-            Token::At, Token::Arrow, Token::DoubleColon, Token::Dot,
-            Token::Colon, Token::SemiColon, Token::Comma,
-            Token::LParen, Token::RParen, Token::LBrace, Token::RBrace,
-            Token::LBracket, Token::RBracket, Token::Question, Token::Hash,
+            Token::At,
+            Token::Arrow,
+            Token::DoubleColon,
+            Token::Dot,
+            Token::Colon,
+            Token::SemiColon,
+            Token::Comma,
+            Token::LParen,
+            Token::RParen,
+            Token::LBrace,
+            Token::RBrace,
+            Token::LBracket,
+            Token::RBracket,
+            Token::Question,
+            Token::Hash,
         ]
     );
 }
@@ -131,15 +190,25 @@ fn test_integer_then_dot_access() {
     // Plain integer followed by member access must NOT be swallowed into a float.
     assert_eq!(
         lex("5.toString"),
-        vec![Token::IntLit(5), Token::Dot, Token::Ident("toString".to_string())]
+        vec![
+            Token::IntLit(5),
+            Token::Dot,
+            Token::Ident("toString".to_string())
+        ]
     );
 }
 
 //STRING LITERALS
 #[test]
 fn test_string_literal() {
-    assert_eq!(lex(r#""hello""#), vec![Token::StringLit("hello".to_string())]);
-    assert_eq!(lex(r#""hello world""#), vec![Token::StringLit("hello world".to_string())]);
+    assert_eq!(
+        lex(r#""hello""#),
+        vec![Token::StringLit("hello".to_string())]
+    );
+    assert_eq!(
+        lex(r#""hello world""#),
+        vec![Token::StringLit("hello world".to_string())]
+    );
 }
 
 #[test]
@@ -165,7 +234,10 @@ fn test_string_with_escaped_quote() {
 
 #[test]
 fn test_escaped_dollar_is_not_interpolation() {
-    assert_eq!(lex(r#""price: \$5""#), vec![Token::StringLit(r"price: \$5".to_string())]);
+    assert_eq!(
+        lex(r#""price: \$5""#),
+        vec![Token::StringLit(r"price: \$5".to_string())]
+    );
 }
 
 //IDENTIFIERS
@@ -188,7 +260,10 @@ fn test_identifiers() {
 fn test_identifier_with_numbers() {
     assert_eq!(
         lex("foo123 x1"),
-        vec![Token::Ident("foo123".to_string()), Token::Ident("x1".to_string())]
+        vec![
+            Token::Ident("foo123".to_string()),
+            Token::Ident("x1".to_string())
+        ]
     );
 }
 
@@ -333,7 +408,10 @@ fn test_interpolation_with_method_call() {
     let tokens = lex(r#""Hi ${user.get_name()}""#);
     match &tokens[0] {
         Token::InterpolatedStringLit(parts) => {
-            assert_eq!(parts[1], StringPart::ExprSource("user.get_name()".to_string()));
+            assert_eq!(
+                parts[1],
+                StringPart::ExprSource("user.get_name()".to_string())
+            );
         }
         other => panic!("Expected InterpolatedStringLit, got {:?}", other),
     }
@@ -344,7 +422,10 @@ fn test_interpolation_with_nested_braces() {
     let tokens = lex(r#""${obj.method({})}""#);
     match &tokens[0] {
         Token::InterpolatedStringLit(parts) => {
-            assert_eq!(parts, &vec![StringPart::ExprSource("obj.method({})".to_string())]);
+            assert_eq!(
+                parts,
+                &vec![StringPart::ExprSource("obj.method({})".to_string())]
+            );
         }
         other => panic!("Expected InterpolatedStringLit, got {:?}", other),
     }
@@ -403,8 +484,12 @@ fn test_real_var_decl() {
     assert_eq!(
         lex("var x: Int = 42;"),
         vec![
-            Token::Var, Token::Ident("x".to_string()), Token::Colon,
-            Token::Ident("Int".to_string()), Token::Assign, Token::IntLit(42),
+            Token::Var,
+            Token::Ident("x".to_string()),
+            Token::Colon,
+            Token::Ident("Int".to_string()),
+            Token::Assign,
+            Token::IntLit(42),
             Token::SemiColon,
         ]
     );
@@ -415,10 +500,18 @@ fn test_real_function_signature() {
     assert_eq!(
         lex("fn add(a: Int, b: Int) -> Int"),
         vec![
-            Token::Fn, Token::Ident("add".to_string()), Token::LParen,
-            Token::Ident("a".to_string()), Token::Colon, Token::Ident("Int".to_string()),
-            Token::Comma, Token::Ident("b".to_string()), Token::Colon,
-            Token::Ident("Int".to_string()), Token::RParen, Token::Arrow,
+            Token::Fn,
+            Token::Ident("add".to_string()),
+            Token::LParen,
+            Token::Ident("a".to_string()),
+            Token::Colon,
+            Token::Ident("Int".to_string()),
+            Token::Comma,
+            Token::Ident("b".to_string()),
+            Token::Colon,
+            Token::Ident("Int".to_string()),
+            Token::RParen,
+            Token::Arrow,
             Token::Ident("Int".to_string()),
         ]
     );
@@ -429,9 +522,85 @@ fn test_real_error_primitive() {
     assert_eq!(
         lex(r#"Error(#NotFound, "missing")"#),
         vec![
-            Token::Error, Token::LParen, Token::Hash,
-            Token::Ident("NotFound".to_string()), Token::Comma,
-            Token::StringLit("missing".to_string()), Token::RParen,
+            Token::Error,
+            Token::LParen,
+            Token::Hash,
+            Token::Ident("NotFound".to_string()),
+            Token::Comma,
+            Token::StringLit("missing".to_string()),
+            Token::RParen,
         ]
     );
+}
+
+#[test]
+fn test_interpolated_string_multiple_segments() {
+    let tokens = lex(r#""${a} and ${b}""#);
+    match &tokens[0] {
+        Token::InterpolatedStringLit(parts) => {
+            assert_eq!(parts.len(), 3);
+            assert_eq!(parts[0], StringPart::ExprSource("a".to_string()));
+            assert_eq!(parts[1], StringPart::Literal(" and ".to_string()));
+            assert_eq!(parts[2], StringPart::ExprSource("b".to_string()));
+        }
+        _ => panic!("Expected InterpolatedStringLit"),
+    }
+}
+
+#[test]
+fn test_interpolated_string_three_segments() {
+    let tokens = lex(r#""${x} + ${y} = ${z}""#);
+    match &tokens[0] {
+        Token::InterpolatedStringLit(parts) => {
+            assert_eq!(parts.len(), 5);
+            assert_eq!(parts[0], StringPart::ExprSource("x".to_string()));
+            assert_eq!(parts[1], StringPart::Literal(" + ".to_string()));
+            assert_eq!(parts[2], StringPart::ExprSource("y".to_string()));
+            assert_eq!(parts[3], StringPart::Literal(" = ".to_string()));
+            assert_eq!(parts[4], StringPart::ExprSource("z".to_string()));
+        }
+        _ => panic!("Expected InterpolatedStringLit"),
+    }
+}
+
+#[test]
+fn test_unclosed_interpolation_does_not_panic() {
+    let result = tokenize(r#""${unclosed""#);
+    match result {
+        Ok(tokens) => {
+            assert!(tokens.len() >= 1);
+        }
+        Err(_) => {}
+    }
+}
+
+#[test]
+fn test_integer_literal_overflow_is_clear_error() {
+    let result = tokenize("99999999999999999999999");
+    match result {
+        Err(e) => {
+            // must mention the literal itself and the max value
+            assert!(
+                e.message.contains("too large"),
+                "Expected 'too large' in message, got: {}",
+                e.message
+            );
+            assert!(
+                e.message.contains("9223372036854775807"),
+                "Expected max Int value in message, got: {}",
+                e.message
+            );
+        }
+        Ok(_) => panic!("Expected error for overflowing integer literal"),
+    }
+}
+
+#[test]
+fn test_max_i64_literal_is_valid() {
+    let result = tokenize("9223372036854775807");
+    assert!(result.is_ok());
+    match &result.unwrap()[0].token {
+        Token::IntLit(n) => assert_eq!(*n, i64::MAX),
+        _ => panic!("Expected IntLit"),
+    }
 }

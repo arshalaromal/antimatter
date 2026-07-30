@@ -285,14 +285,20 @@ pub fn tokenize(source: &str) -> CompilerResult<Vec<SpannedToken>> {
             }
             Err(_) => {
                 let bad_text = lex.slice().to_string();
-                return Err(CompilerError::new(
-                    line,
-                    column,
-                    format!("Unrecognized token '{}'", bad_text),
-                ));
+                let msg = if bad_text.chars().all(|c| c.is_ascii_digit()) {
+                    format!(
+                        "Integer literal '{}' is too large for Int (max: {})",
+                        bad_text,
+                        i64::MAX
+                    )
+                } else {
+                    format!("Unrecognized token '{}'", bad_text)
+                };
+                return Err(CompilerError::new(line, column, msg));
             }
         }
     }
 
     Ok(tokens)
 }
+
