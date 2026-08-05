@@ -379,7 +379,7 @@ impl Parser {
                 return Err(CompilerError::new(
                     line,
                     col,
-                    "Redundant '!' — type is already failable. Write '!T', not '!!T'.".to_string(),
+                    "Redundant '!' - type is already failable. Write '!T', not '!!T'.".to_string(),
                 ));
             }
             return Ok(Type::Failable(Box::new(inner)));

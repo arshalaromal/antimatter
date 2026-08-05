@@ -1383,7 +1383,7 @@ fn test_double_colon_left_must_be_identifier() {
 
 #[test]
 fn test_double_colon_on_call_result_is_error() {
-    // get_status()::Active — left side is a call, not an identifier
+    // get_status()::Active - left side is a call, not an identifier
     let result = try_parse("fn _t() { var x = get_status()::Active; }");
     assert!(result.is_err());
 }
@@ -1461,4 +1461,60 @@ fn test_double_failable_list_is_rejected() {
 fn test_double_failable_in_return_type_is_rejected() {
     let result = try_parse("fn f() -> !!Int { }");
     assert!(result.is_err());
+}
+
+
+#[test]
+fn test_extern_fn_no_body() {
+    let prog = parse("@extern fn sin(x: Float) -> Float;");
+    match &prog.items[0] {
+        Item::Function(f) => {
+            assert!(f.directives.contains(&"extern".to_string()));
+            assert_eq!(f.name, "sin");
+            assert_eq!(f.parameters.len(), 1);
+            assert_eq!(f.parameters[0].name, "x");
+            assert!(f.body.is_empty());
+        }
+        _ => panic!("Expected extern function"),
+    }
+}
+
+#[test]
+fn test_extern_pub_fn() {
+    let prog = parse("@extern pub fn malloc(size: Int) -> Int;");
+    match &prog.items[0] {
+        Item::Function(f) => {
+            assert!(f.directives.contains(&"extern".to_string()));
+            assert!(f.is_pub);
+            assert!(f.body.is_empty());
+        }
+        _ => panic!("Expected extern pub function"),
+    }
+}
+
+#[test]
+fn test_extern_fn_no_params() {
+    let prog = parse("@extern fn get_time() -> Int;");
+    match &prog.items[0] {
+        Item::Function(f) => {
+            assert!(f.directives.contains(&"extern".to_string()));
+            assert_eq!(f.parameters.len(), 0);
+            assert!(f.body.is_empty());
+        }
+        _ => panic!("Expected extern function"),
+    }
+}
+
+#[test]
+fn test_extern_fn_multiple_params() {
+    let prog = parse("@extern fn memcpy(dst: Int, src: Int, n: Int) -> Int;");
+    match &prog.items[0] {
+        Item::Function(f) => {
+            assert!(f.directives.contains(&"extern".to_string()));
+            assert_eq!(f.parameters.len(), 3);
+            assert_eq!(f.parameters[2].name, "n");
+            assert!(f.body.is_empty());
+        }
+        _ => panic!("Expected extern function"),
+    }
 }
