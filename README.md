@@ -10,7 +10,11 @@
 ![Codegen](https://img.shields.io/badge/Codegen-Planned-lightgrey)
 ![Compiler](https://img.shields.io/badge/Compiler-In%20Development-orange)
 
-Antimatter is currently in active development. The lexer and parser are complete, while the semantic checker, compiler pipeline, and code generation are still being built.
+<br>
+
+> ⚠️ **Development Paused:** Development of Antimatter is currently paused due to limited availability. Work may resume occasionally when time permits, but the project will not be under continuous active development for the foreseeable future.
+
+<br>Antimatter is currently under intermittent development. The lexer and parser are complete, while the semantic checker, compiler pipeline, and code generation are still being built.
 
 > **Latest Update:** [Engineering Log #2](https://github.com/arshalaromal/antimatter/discussions/11)
 
