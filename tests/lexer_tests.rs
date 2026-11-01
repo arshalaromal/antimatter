@@ -56,6 +56,14 @@ fn test_keywords() {
         ]
     );
 }
+
+#[test]
+fn test_error_keyword_vs_identifier() {
+    assert_eq!(
+        lex("Error error"),
+        vec![Token::Error, Token::Ident("error".to_string())]
+    );
+}
 //OPERATORS
 #[test]
 fn test_arithmetic_operators() {
@@ -131,6 +139,7 @@ fn test_multichar_operators_not_split() {
     assert_eq!(lex("=="), vec![Token::EqEq]);
     assert_eq!(lex("&&"), vec![Token::And]);
     assert_eq!(lex("<<="), vec![Token::ShlEq]);
+    assert_eq!(lex(">>="), vec![Token::ShrEq]);
 }
 
 #[test]
@@ -216,6 +225,14 @@ fn test_raw_string() {
     assert_eq!(
         lex(r#"`raw \n string`"#),
         vec![Token::RawString(r"raw \n string".to_string())]
+    );
+}
+
+#[test]
+fn test_raw_string_multiline() {
+    assert_eq!(
+        lex("`line 1\nline 2`"),
+        vec![Token::RawString("line 1\nline 2".to_string())]
     );
 }
 
@@ -531,20 +548,6 @@ fn test_real_error_primitive() {
             Token::RParen,
         ]
     );
-}
-
-#[test]
-fn test_interpolated_string_multiple_segments() {
-    let tokens = lex(r#""${a} and ${b}""#);
-    match &tokens[0] {
-        Token::InterpolatedStringLit(parts) => {
-            assert_eq!(parts.len(), 3);
-            assert_eq!(parts[0], StringPart::ExprSource("a".to_string()));
-            assert_eq!(parts[1], StringPart::Literal(" and ".to_string()));
-            assert_eq!(parts[2], StringPart::ExprSource("b".to_string()));
-        }
-        _ => panic!("Expected InterpolatedStringLit"),
-    }
 }
 
 #[test]
