@@ -65,23 +65,23 @@ pub trait AstVisitor {
     }
 
     fn walk_stmt(&mut self, stmt: &Stmt) {
-        match stmt {
-            Stmt::VarDecl { initializer, .. } => {
+        match &stmt.node {
+            StmtNode::VarDecl { initializer, .. } => {
                 if let Some(expr) = initializer {
                     self.visit_expr(expr);
                 }
             }
 
-            Stmt::Assignment { target, value, .. } => {
+            StmtNode::Assignment { target, value, .. } => {
                 self.walk_assign_target(target);
                 self.visit_expr(value);
             }
 
-            Stmt::Expression(expr) => {
+            StmtNode::Expression(expr) => {
                 self.visit_expr(expr);
             }
 
-            Stmt::If { condition, then_branch, else_branch } => {
+            StmtNode::If { condition, then_branch, else_branch } => {
                 self.visit_expr(condition);
                 self.visit_stmt(then_branch);
                 if let Some(else_stmt) = else_branch {
@@ -89,29 +89,29 @@ pub trait AstVisitor {
                 }
             }
 
-            Stmt::While { condition, body } => {
+            StmtNode::While { condition, body } => {
                 self.visit_expr(condition);
                 self.visit_stmt(body);
             }
 
-            Stmt::For { iterator, body, .. } => {
+            StmtNode::For { iterator, body, .. } => {
                 self.visit_expr(iterator);
                 self.visit_stmt(body);
             }
 
-            Stmt::Break | Stmt::Continue => {}
+            StmtNode::Break | StmtNode::Continue => {}
 
-            Stmt::Return(expr) => {
+            StmtNode::Return(expr) => {
                 if let Some(e) = expr {
                     self.visit_expr(e);
                 }
             }
 
-            Stmt::Yield(expr) => {
+            StmtNode::Yield(expr) => {
                 self.visit_expr(expr);
             }
 
-            Stmt::Defer(inner) => {
+            StmtNode::Defer(inner) => {
                 self.visit_stmt(inner);
             }
         }
@@ -137,52 +137,52 @@ pub trait AstVisitor {
     }
 
     fn walk_expr(&mut self, expr: &Expr) {
-        match expr {
-            Expr::Literal(_)
-            | Expr::ECodeLit(_)
-            | Expr::Identifier(_)
-            | Expr::SelfKw
-            | Expr::EnumVariant { .. } => {}
+        match &expr.node {
+            ExprNode::Literal(_)
+            | ExprNode::ECodeLit(_)
+            | ExprNode::Identifier(_)
+            | ExprNode::SelfKw
+            | ExprNode::EnumVariant { .. } => {}
 
-            Expr::Unary { right, .. } => {
+            ExprNode::Unary { right, .. } => {
                 self.visit_expr(right);
             }
 
-            Expr::Binary { left, right, .. } => {
+            ExprNode::Binary { left, right, .. } => {
                 self.visit_expr(left);
                 self.visit_expr(right);
             }
 
-            Expr::Call { callee, arguments } => {
+            ExprNode::Call { callee, arguments } => {
                 self.visit_expr(callee);
                 for (_, arg) in arguments {
                     self.visit_expr(arg);
                 }
             }
 
-            Expr::MemberAccess { object, .. } => {
+            ExprNode::MemberAccess { object, .. } => {
                 self.visit_expr(object);
             }
 
-            Expr::Index { list, index } => {
+            ExprNode::Index { list, index } => {
                 self.visit_expr(list);
                 self.visit_expr(index);
             }
 
-            Expr::List(items) => {
+            ExprNode::List(items) => {
                 for item in items {
                     self.visit_expr(item);
                 }
             }
 
-            Expr::Map(pairs) => {
+            ExprNode::Map(pairs) => {
                 for (key, value) in pairs {
                     self.visit_expr(key);
                     self.visit_expr(value);
                 }
             }
 
-            Expr::InterpolatedString(segments) => {
+            ExprNode::InterpolatedString(segments) => {
                 for seg in segments {
                     if let StringSegment::Expr(e) = seg {
                         self.visit_expr(e);
@@ -190,13 +190,13 @@ pub trait AstVisitor {
                 }
             }
 
-            Expr::StructInit { fields, .. } => {
+            ExprNode::StructInit { fields, .. } => {
                 for (_, value) in fields {
                     self.visit_expr(value);
                 }
             }
 
-            Expr::Switch { target, arms, default_arm } => {
+            ExprNode::Switch { target, arms, default_arm } => {
                 self.visit_expr(target);
                 for (pattern, result) in arms {
                     self.visit_expr(pattern);
@@ -205,22 +205,22 @@ pub trait AstVisitor {
                 self.visit_expr(default_arm);
             }
 
-            Expr::Block(stmts) => {
+            ExprNode::Block(stmts) => {
                 for stmt in stmts {
                     self.visit_stmt(stmt);
                 }
             }
 
-            Expr::PropagateError(inner) => {
+            ExprNode::PropagateError(inner) => {
                 self.visit_expr(inner);
             }
 
-            Expr::OrFallback { try_expr, fallback, .. } => {
+            ExprNode::OrFallback { try_expr, fallback, .. } => {
                 self.visit_expr(try_expr);
                 self.visit_expr(fallback);
             }
 
-            Expr::Error { message, .. } => {
+            ExprNode::Error { message, .. } => {
                 self.visit_expr(message);
             }
         }

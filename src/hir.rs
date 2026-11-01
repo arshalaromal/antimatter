@@ -1,5 +1,7 @@
 //! High-level Intermediate Representation (HIR) for Antimatter.
 
+use crate::span::Span;
+
 /// A fully resolved Antimatter type. No Type::Basic(String) ambiguity.
 #[derive(Debug, PartialEq, Clone)]
 pub enum HirType {
@@ -56,11 +58,18 @@ pub enum BinaryOp {
 }
 
 // Expressions
-/// A typed HIR expression.
+/// A typed HIR expression with its source location.
 #[derive(Debug, PartialEq, Clone)]
 pub struct HirExpr {
     pub kind: HirExprKind,
     pub ty: HirType,
+    pub span: Span,
+}
+
+impl HirExpr {
+    pub fn new(kind: HirExprKind, ty: HirType, span: Span) -> Self {
+        Self { kind, ty, span }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -111,7 +120,7 @@ pub enum HirExprKind {
     },
 
     /// A method call on a receiver.
-    /// eg: `user.greet("hello")` → receiver=user, method="greet", args=\["hello"]
+    /// eg: `user.greet("hello")` → receiver=user, method="greet", args=["hello"]
     ///
     /// Also covers desugared shorthand init:
     /// eg: `User(a, b)` → receiver=HirType::Struct("User"), method="new", args=[a, b]
@@ -199,10 +208,22 @@ pub enum HirFormatPart {
     Val(HirExpr),
 }
 
-
-/// HIR statements.
+/// HIR statement with its source location.
 #[derive(Debug, PartialEq, Clone)]
-pub enum HirStmt {
+pub struct HirStmt {
+    pub kind: HirStmtKind,
+    pub span: Span,
+}
+
+impl HirStmt {
+    pub fn new(kind: HirStmtKind, span: Span) -> Self {
+        Self { kind, span }
+    }
+}
+
+/// HIR statement kinds.
+#[derive(Debug, PartialEq, Clone)]
+pub enum HirStmtKind {
     /// ty is always resolved - never unknown.
     VarDecl {
         is_const: bool,
@@ -259,6 +280,7 @@ pub enum HirAssignTarget {
 pub struct HirParam {
     pub name: String,
     pub ty: HirType,
+    pub span: Span,
 }
 
 /// A fully resolved function.
@@ -280,6 +302,7 @@ pub struct HirFunction {
     pub params: Vec<HirParam>,
     pub return_type: HirType,
     pub body: Vec<HirStmt>,
+    pub span: Span,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -288,6 +311,7 @@ pub struct HirStructField {
     pub ty: HirType,
     pub is_pub: bool,
     pub directives: Vec<String>,
+    pub span: Span,
 }
 
 /// A resolved struct. Impl block methods are merged in during lowering.
@@ -300,6 +324,7 @@ pub struct HirStruct {
     pub fields: Vec<HirStructField>,
     /// All methods from all `impl StructName { }` blocks, merged and lowered.
     pub methods: Vec<HirFunction>,
+    pub span: Span,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -308,6 +333,7 @@ pub struct HirEnum {
     pub is_pub: bool,
     pub directives: Vec<String>,
     pub variants: Vec<String>,
+    pub span: Span,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -316,6 +342,7 @@ pub struct HirTypeAlias {
     pub is_pub: bool,
     pub directives: Vec<String>,
     pub target: HirType,
+    pub span: Span,
 }
 
 // Program root
