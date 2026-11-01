@@ -9,8 +9,4 @@ impl Span {
     pub fn new(line: usize, column: usize) -> Self {
         Self { line, column }
     }
-
-    pub fn dummy() -> Self {
-        Self { line: 0, column: 0 }
-    }
 }
