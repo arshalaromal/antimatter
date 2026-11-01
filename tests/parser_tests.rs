@@ -4,6 +4,28 @@ use antimatter::ast::*;
 use antimatter::error::CompilerResult;
 use antimatter::lexer::*;
 use antimatter::parser::Parser;
+use antimatter::span::Span;
+
+macro_rules! ex {
+    ($node:expr) => {
+        Expr::new($node, Span::new(0, 0))
+    };
+}
+macro_rules! en {
+    ($node:expr) => {
+        Box::new(ex!($node))
+    };
+}
+macro_rules! st {
+    ($node:expr) => {
+        Stmt::new($node, Span::new(0, 0))
+    };
+}
+macro_rules! sn {
+    ($node:expr) => {
+        Box::new(st!($node))
+    };
+}
 
 /// Parses a full program from source. Panics with the compiler's error message
 /// if lexing or parsing fails.
@@ -57,8 +79,8 @@ fn parse_expr_src(expr_src: &str) -> Expr {
     let wrapped = format!("fn _test() {{ {}; }}", expr_src);
     let prog = parse(&wrapped);
     match &prog.items[0] {
-        Item::Function(f) => match &f.body[0] {
-            Stmt::Expression(e) => e.clone(),
+        Item::Function(f) => match &f.body[0].node {
+            StmtNode::Expression(e) => e.clone(),
             other => panic!("Expected expression statement, got {:?}", other),
         },
         _ => panic!("Expected function wrapper"),
@@ -70,8 +92,8 @@ fn parse_type_src(ty_src: &str) -> Type {
     let wrapped = format!("fn _test() {{ var x: {}; }}", ty_src);
     let prog = parse(&wrapped);
     match &prog.items[0] {
-        Item::Function(f) => match &f.body[0] {
-            Stmt::VarDecl {
+        Item::Function(f) => match &f.body[0].node {
+            StmtNode::VarDecl {
                 type_annotation, ..
             } => type_annotation
                 .clone()
@@ -94,7 +116,7 @@ fn test_empty_program() {
 fn test_empty_function() {
     assert_eq!(
         parse_single_item("fn main() { }"),
-        Item::Function(FunctionDecl {
+        Item::Function(FunctionDecl { span: Span::new(0, 0),
             directives: vec![],
             is_pub: false,
             name: "main".to_string(),
@@ -109,7 +131,7 @@ fn test_empty_function() {
 fn test_pub_function() {
     assert_eq!(
         parse_single_item("pub fn run() { }"),
-        Item::Function(FunctionDecl {
+        Item::Function(FunctionDecl { span: Span::new(0, 0),
             directives: vec![],
             is_pub: true,
             name: "run".to_string(),
@@ -124,24 +146,24 @@ fn test_pub_function() {
 fn test_function_with_parameters_and_return_type() {
     assert_eq!(
         parse_single_item("fn add(a: Int, b: Int) -> Int { return a; }"),
-        Item::Function(FunctionDecl {
+        Item::Function(FunctionDecl { span: Span::new(0, 0),
             directives: vec![],
             is_pub: false,
             name: "add".to_string(),
             parameters: vec![
-                Parameter {
+                Parameter { span: Span::new(0, 0),
                     name: "a".to_string(),
                     type_name: Type::Basic("Int".to_string()),
                     default_value: None,
                 },
-                Parameter {
+                Parameter { span: Span::new(0, 0),
                     name: "b".to_string(),
                     type_name: Type::Basic("Int".to_string()),
                     default_value: None,
                 },
             ],
             return_type: Some(Type::Basic("Int".to_string())),
-            body: vec![Stmt::Return(Some(Expr::Identifier("a".to_string())))],
+            body: vec![st!(StmtNode::Return(Some(ex!(ExprNode::Identifier("a".to_string())))))],
         })
     );
 }
@@ -163,14 +185,14 @@ fn test_function_parameters_trailing_comma() {
 fn test_function_parameter_default_values() {
     assert_eq!(
         parse_single_item(r#"fn greet(name: String = "World") { }"#),
-        Item::Function(FunctionDecl {
+        Item::Function(FunctionDecl { span: Span::new(0, 0),
             directives: vec![],
             is_pub: false,
             name: "greet".to_string(),
-            parameters: vec![Parameter {
+            parameters: vec![Parameter { span: Span::new(0, 0),
                 name: "name".to_string(),
                 type_name: Type::Basic("String".to_string()),
-                default_value: Some(Expr::Literal(Literal::String("World".to_string()))),
+                default_value: Some(ex!(ExprNode::Literal(Literal::String("World".to_string())))),
             }],
             return_type: None,
             body: vec![],
@@ -186,7 +208,7 @@ fn test_function_mixed_required_and_default_parameters() {
             assert!(f.parameters[0].default_value.is_none());
             assert_eq!(
                 f.parameters[1].default_value,
-                Some(Expr::Literal(Literal::Int(8080)))
+                Some(ex!(ExprNode::Literal(Literal::Int(8080))))
             );
         }
         _ => panic!("Expected function"),
@@ -224,11 +246,11 @@ fn test_function_multiple_directives_order() {
 fn test_extern_function_no_body() {
     assert_eq!(
         parse_single_item("@extern fn sin(x: Float) -> Float;"),
-        Item::Function(FunctionDecl {
+        Item::Function(FunctionDecl { span: Span::new(0, 0),
             directives: vec!["extern".to_string()],
             is_pub: false,
             name: "sin".to_string(),
-            parameters: vec![Parameter {
+            parameters: vec![Parameter { span: Span::new(0, 0),
                 name: "x".to_string(),
                 type_name: Type::Basic("Float".to_string()),
                 default_value: None,
@@ -304,18 +326,18 @@ fn test_pub_before_directive_is_rejected() {
 fn test_struct_definition() {
     assert_eq!(
         parse_single_item("struct User { name: String, age: Int, }"),
-        Item::Struct {
+        Item::Struct { span: Span::new(0, 0),
             directives: vec![],
             is_pub: false,
             name: "User".to_string(),
             fields: vec![
-                StructField {
+                StructField { span: Span::new(0, 0),
                     directives: vec![],
                     is_pub: false,
                     name: "name".to_string(),
                     type_name: Type::Basic("String".to_string()),
                 },
-                StructField {
+                StructField { span: Span::new(0, 0),
                     directives: vec![],
                     is_pub: false,
                     name: "age".to_string(),
@@ -330,18 +352,18 @@ fn test_struct_definition() {
 fn test_struct_with_pub_and_weak_fields() {
     assert_eq!(
         parse_single_item("pub struct Node { pub name: String, @weak parent: Node }"),
-        Item::Struct {
+        Item::Struct { span: Span::new(0, 0),
             directives: vec![],
             is_pub: true,
             name: "Node".to_string(),
             fields: vec![
-                StructField {
+                StructField { span: Span::new(0, 0),
                     directives: vec![],
                     is_pub: true,
                     name: "name".to_string(),
                     type_name: Type::Basic("String".to_string()),
                 },
-                StructField {
+                StructField { span: Span::new(0, 0),
                     directives: vec!["weak".to_string()],
                     is_pub: false,
                     name: "parent".to_string(),
@@ -356,7 +378,7 @@ fn test_struct_with_pub_and_weak_fields() {
 fn test_empty_struct() {
     assert_eq!(
         parse_single_item("struct Empty { }"),
-        Item::Struct {
+        Item::Struct { span: Span::new(0, 0),
             directives: vec![],
             is_pub: false,
             name: "Empty".to_string(),
@@ -369,7 +391,7 @@ fn test_empty_struct() {
 fn test_enum_definition() {
     assert_eq!(
         parse_single_item("enum Status { Active, Pending, Closed, }"),
-        Item::Enum {
+        Item::Enum { span: Span::new(0, 0),
             directives: vec![],
             is_pub: false,
             name: "Status".to_string(),
@@ -386,7 +408,7 @@ fn test_enum_definition() {
 fn test_pub_enum_without_trailing_comma() {
     assert_eq!(
         parse_single_item("pub enum Direction { North, South, East, West }"),
-        Item::Enum {
+        Item::Enum { span: Span::new(0, 0),
             directives: vec![],
             is_pub: true,
             name: "Direction".to_string(),
@@ -404,7 +426,7 @@ fn test_pub_enum_without_trailing_comma() {
 fn test_empty_enum() {
     assert_eq!(
         parse_single_item("enum Empty { }"),
-        Item::Enum {
+        Item::Enum { span: Span::new(0, 0),
             directives: vec![],
             is_pub: false,
             name: "Empty".to_string(),
@@ -417,18 +439,18 @@ fn test_empty_enum() {
 fn test_impl_block_single_method() {
     assert_eq!(
         parse_single_item("impl User { pub fn get_name() -> String { return self.name; } }"),
-        Item::Impl {
+        Item::Impl { span: Span::new(0, 0),
             target: "User".to_string(),
-            methods: vec![FunctionDecl {
+            methods: vec![FunctionDecl { span: Span::new(0, 0),
                 directives: vec![],
                 is_pub: true,
                 name: "get_name".to_string(),
                 parameters: vec![],
                 return_type: Some(Type::Basic("String".to_string())),
-                body: vec![Stmt::Return(Some(Expr::MemberAccess {
-                    object: Box::new(Expr::SelfKw),
+                body: vec![st!(StmtNode::Return(Some(ex!(ExprNode::MemberAccess {
+                    object: en!(ExprNode::SelfKw),
                     property: "name".to_string(),
-                }))],
+                }))))],
             }],
         }
     );
@@ -438,7 +460,7 @@ fn test_impl_block_single_method() {
 fn test_impl_block_multiple_methods() {
     let item = parse_single_item("impl User { fn a() { } fn b() { } }");
     match item {
-        Item::Impl { target, methods } => {
+        Item::Impl { target, methods, .. } => {
             assert_eq!(target, "User");
             assert_eq!(methods.len(), 2);
             assert_eq!(methods[0].name, "a");
@@ -465,7 +487,7 @@ fn test_non_fn_inside_impl_is_rejected() {
 fn test_type_alias() {
     assert_eq!(
         parse_single_item("type Port = Int;"),
-        Item::TypeAlias {
+        Item::TypeAlias { span: Span::new(0, 0),
             directives: vec![],
             is_pub: false,
             name: "Port".to_string(),
@@ -478,7 +500,7 @@ fn test_type_alias() {
 fn test_pub_type_alias_with_composite_type() {
     assert_eq!(
         parse_single_item("pub type LookupTable = {String: [Int]};"),
-        Item::TypeAlias {
+        Item::TypeAlias { span: Span::new(0, 0),
             directives: vec![],
             is_pub: true,
             name: "LookupTable".to_string(),
@@ -497,7 +519,7 @@ fn test_use_single_stdlib_module() {
     // "use io;" -> path: [], items: ["io"]
     assert_eq!(
         parse_single_item("use io;"),
-        Item::Use {
+        Item::Use { span: Span::new(0, 0),
             path: vec![],
             items: vec!["io".to_string()],
         }
@@ -509,7 +531,7 @@ fn test_use_single_path_item() {
     // "use net::http;" -> path: ["net"], items: ["http"]
     assert_eq!(
         parse_single_item("use net::http;"),
-        Item::Use {
+        Item::Use { span: Span::new(0, 0),
             path: vec!["net".to_string()],
             items: vec!["http".to_string()],
         }
@@ -521,7 +543,7 @@ fn test_use_multi_import() {
     // "use net::http::{Request, Response};" -> path: ["net", "http"], items: ["Request", "Response"]
     assert_eq!(
         parse_single_item("use net::http::{Request, Response};"),
-        Item::Use {
+        Item::Use { span: Span::new(0, 0),
             path: vec!["net".to_string(), "http".to_string()],
             items: vec!["Request".to_string(), "Response".to_string()],
         }
@@ -532,7 +554,7 @@ fn test_use_multi_import() {
 fn test_use_multi_import_trailing_comma() {
     assert_eq!(
         parse_single_item("use a::{b, c,};"),
-        Item::Use {
+        Item::Use { span: Span::new(0, 0),
             path: vec!["a".to_string()],
             items: vec!["b".to_string(), "c".to_string()],
         }
@@ -653,12 +675,12 @@ fn test_function_type_without_return_arrow_is_rejected() {
 fn test_var_decl_with_type_and_value() {
     assert_eq!(
         parse_stmt_src("var x: Int = 42;"),
-        Stmt::VarDecl {
+        st!(StmtNode::VarDecl {
             is_const: false,
             name: "x".to_string(),
             type_annotation: Some(Type::Basic("Int".to_string())),
-            initializer: Some(Expr::Literal(Literal::Int(42))),
-        }
+            initializer: Some(ex!(ExprNode::Literal(Literal::Int(42)))),
+        })
     );
 }
 
@@ -666,12 +688,12 @@ fn test_var_decl_with_type_and_value() {
 fn test_var_decl_type_inferred() {
     assert_eq!(
         parse_stmt_src("var y = 5;"),
-        Stmt::VarDecl {
+        st!(StmtNode::VarDecl {
             is_const: false,
             name: "y".to_string(),
             type_annotation: None,
-            initializer: Some(Expr::Literal(Literal::Int(5))),
-        }
+            initializer: Some(ex!(ExprNode::Literal(Literal::Int(5)))),
+        })
     );
 }
 
@@ -679,12 +701,12 @@ fn test_var_decl_type_inferred() {
 fn test_var_decl_type_only_no_initializer() {
     assert_eq!(
         parse_stmt_src("var z: Int;"),
-        Stmt::VarDecl {
+        st!(StmtNode::VarDecl {
             is_const: false,
             name: "z".to_string(),
             type_annotation: Some(Type::Basic("Int".to_string())),
             initializer: None,
-        }
+        })
     );
 }
 
@@ -693,12 +715,12 @@ fn test_var_decl_bare_no_type_no_initializer() {
     // Parses in grammar; semantic checker later catches/rejects it
     assert_eq!(
         parse_stmt_src("var bare;"),
-        Stmt::VarDecl {
+        st!(StmtNode::VarDecl {
             is_const: false,
             name: "bare".to_string(),
             type_annotation: None,
             initializer: None,
-        }
+        })
     );
 }
 
@@ -706,12 +728,12 @@ fn test_var_decl_bare_no_type_no_initializer() {
 fn test_const_decl() {
     assert_eq!(
         parse_stmt_src("const PI = 3.14;"),
-        Stmt::VarDecl {
+        st!(StmtNode::VarDecl {
             is_const: true,
             name: "PI".to_string(),
             type_annotation: None,
-            initializer: Some(Expr::Literal(Literal::Float(3.14))),
-        }
+            initializer: Some(ex!(ExprNode::Literal(Literal::Float(3.14)))),
+        })
     );
 }
 
@@ -720,11 +742,11 @@ fn test_const_decl() {
 fn test_assignment_to_identifier() {
     assert_eq!(
         parse_stmt_src("x = 5;"),
-        Stmt::Assignment {
+        st!(StmtNode::Assignment {
             target: AssignTarget::Identifier("x".to_string()),
             operator: Token::Assign,
-            value: Expr::Literal(Literal::Int(5)),
-        }
+            value: ex!(ExprNode::Literal(Literal::Int(5))),
+        })
     );
 }
 
@@ -732,14 +754,14 @@ fn test_assignment_to_identifier() {
 fn test_assignment_to_member_access() {
     assert_eq!(
         parse_stmt_src(r#"user.name = "Stark";"#),
-        Stmt::Assignment {
+        st!(StmtNode::Assignment {
             target: AssignTarget::MemberAccess {
-                object: Box::new(Expr::Identifier("user".to_string())),
+                object: en!(ExprNode::Identifier("user".to_string())),
                 property: "name".to_string(),
             },
             operator: Token::Assign,
-            value: Expr::Literal(Literal::String("Stark".to_string())),
-        }
+            value: ex!(ExprNode::Literal(Literal::String("Stark".to_string()))),
+        })
     );
 }
 
@@ -747,17 +769,17 @@ fn test_assignment_to_member_access() {
 fn test_assignment_to_nested_member_access() {
     assert_eq!(
         parse_stmt_src("a.b.c = 10;"),
-        Stmt::Assignment {
+        st!(StmtNode::Assignment {
             target: AssignTarget::MemberAccess {
-                object: Box::new(Expr::MemberAccess {
-                    object: Box::new(Expr::Identifier("a".to_string())),
+                object: en!(ExprNode::MemberAccess {
+                    object: en!(ExprNode::Identifier("a".to_string())),
                     property: "b".to_string(),
                 }),
                 property: "c".to_string(),
             },
             operator: Token::Assign,
-            value: Expr::Literal(Literal::Int(10)),
-        }
+            value: ex!(ExprNode::Literal(Literal::Int(10))),
+        })
     );
 }
 
@@ -765,14 +787,14 @@ fn test_assignment_to_nested_member_access() {
 fn test_assignment_to_index() {
     assert_eq!(
         parse_stmt_src("list[0] = 9;"),
-        Stmt::Assignment {
+        st!(StmtNode::Assignment {
             target: AssignTarget::Index {
-                list: Box::new(Expr::Identifier("list".to_string())),
-                index: Box::new(Expr::Literal(Literal::Int(0))),
+                list: en!(ExprNode::Identifier("list".to_string())),
+                index: en!(ExprNode::Literal(Literal::Int(0))),
             },
             operator: Token::Assign,
-            value: Expr::Literal(Literal::Int(9)),
-        }
+            value: ex!(ExprNode::Literal(Literal::Int(9))),
+        })
     );
 }
 
@@ -780,27 +802,27 @@ fn test_assignment_to_index() {
 fn test_compound_assignments() {
     assert_eq!(
         parse_stmt_src("x += 1;"),
-        Stmt::Assignment {
+        st!(StmtNode::Assignment {
             target: AssignTarget::Identifier("x".to_string()),
             operator: Token::PlusEq,
-            value: Expr::Literal(Literal::Int(1)),
-        }
+            value: ex!(ExprNode::Literal(Literal::Int(1))),
+        })
     );
     assert_eq!(
         parse_stmt_src("flags &= mask;"),
-        Stmt::Assignment {
+        st!(StmtNode::Assignment {
             target: AssignTarget::Identifier("flags".to_string()),
             operator: Token::BitAndEq,
-            value: Expr::Identifier("mask".to_string()),
-        }
+            value: ex!(ExprNode::Identifier("mask".to_string())),
+        })
     );
     assert_eq!(
         parse_stmt_src("val <<= 2;"),
-        Stmt::Assignment {
+        st!(StmtNode::Assignment {
             target: AssignTarget::Identifier("val".to_string()),
             operator: Token::ShlEq,
-            value: Expr::Literal(Literal::Int(2)),
-        }
+            value: ex!(ExprNode::Literal(Literal::Int(2))),
+        })
     );
 }
 
@@ -816,25 +838,25 @@ fn test_invalid_assignment_target_is_rejected() {
 fn test_if_no_else() {
     assert_eq!(
         parse_stmt_src("if x > 0 { return 1; }"),
-        Stmt::If {
-            condition: Expr::Binary {
-                left: Box::new(Expr::Identifier("x".to_string())),
+        st!(StmtNode::If {
+            condition: ex!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("x".to_string())),
                 operator: Token::Gt,
-                right: Box::new(Expr::Literal(Literal::Int(0))),
-            },
-            then_branch: Box::new(Stmt::Expression(Expr::Block(vec![Stmt::Return(Some(
-                Expr::Literal(Literal::Int(1))
-            ))]))),
+                right: en!(ExprNode::Literal(Literal::Int(0))),
+            }),
+            then_branch: sn!(StmtNode::Expression(ex!(ExprNode::Block(vec![st!(StmtNode::Return(Some(
+                ex!(ExprNode::Literal(Literal::Int(1)))
+            )))])))),
             else_branch: None,
-        }
+        })
     );
 }
 
 #[test]
 fn test_if_else() {
     let stmt = parse_stmt_src("if x > 0 { return 1; } else { return 0; }");
-    match stmt {
-        Stmt::If { else_branch, .. } => assert!(else_branch.is_some()),
+    match &stmt.node {
+        StmtNode::If { else_branch, .. } => assert!(else_branch.is_some()),
         _ => panic!("Expected If"),
     }
 }
@@ -842,9 +864,9 @@ fn test_if_else() {
 #[test]
 fn test_else_if_chain() {
     let stmt = parse_stmt_src("if a { } else if b { } else { }");
-    match stmt {
-        Stmt::If { else_branch, .. } => match *else_branch.expect("Expected else branch") {
-            Stmt::If {
+    match &stmt.node {
+        StmtNode::If { else_branch, .. } => match &else_branch.as_ref().expect("Expected else branch").node {
+            StmtNode::If {
                 else_branch: inner_else,
                 ..
             } => {
@@ -860,11 +882,11 @@ fn test_else_if_chain() {
 fn test_braceless_if() {
     assert_eq!(
         parse_stmt_src("if active return true;"),
-        Stmt::If {
-            condition: Expr::Identifier("active".to_string()),
-            then_branch: Box::new(Stmt::Return(Some(Expr::Literal(Literal::Bool(true))))),
+        st!(StmtNode::If {
+            condition: ex!(ExprNode::Identifier("active".to_string())),
+            then_branch: sn!(StmtNode::Return(Some(ex!(ExprNode::Literal(Literal::Bool(true)))))),
             else_branch: None,
-        }
+        })
     );
 }
 
@@ -872,10 +894,10 @@ fn test_braceless_if() {
 fn test_while_loop() {
     assert_eq!(
         parse_stmt_src("while active { break; }"),
-        Stmt::While {
-            condition: Expr::Identifier("active".to_string()),
-            body: Box::new(Stmt::Expression(Expr::Block(vec![Stmt::Break]))),
-        }
+        st!(StmtNode::While {
+            condition: ex!(ExprNode::Identifier("active".to_string())),
+            body: sn!(StmtNode::Expression(ex!(ExprNode::Block(vec![st!(StmtNode::Break)])))),
+        })
     );
 }
 
@@ -883,10 +905,10 @@ fn test_while_loop() {
 fn test_braceless_while() {
     assert_eq!(
         parse_stmt_src("while active break;"),
-        Stmt::While {
-            condition: Expr::Identifier("active".to_string()),
-            body: Box::new(Stmt::Break),
-        }
+        st!(StmtNode::While {
+            condition: ex!(ExprNode::Identifier("active".to_string())),
+            body: sn!(StmtNode::Break),
+        })
     );
 }
 
@@ -894,11 +916,11 @@ fn test_braceless_while() {
 fn test_for_loop() {
     assert_eq!(
         parse_stmt_src("for item in list { continue; }"),
-        Stmt::For {
+        st!(StmtNode::For {
             item_name: "item".to_string(),
-            iterator: Expr::Identifier("list".to_string()),
-            body: Box::new(Stmt::Expression(Expr::Block(vec![Stmt::Continue]))),
-        }
+            iterator: ex!(ExprNode::Identifier("list".to_string())),
+            body: sn!(StmtNode::Expression(ex!(ExprNode::Block(vec![st!(StmtNode::Continue)])))),
+        })
     );
 }
 
@@ -906,11 +928,11 @@ fn test_for_loop() {
 fn test_for_loop_with_discard_variable() {
     assert_eq!(
         parse_stmt_src("for _ in list { continue; }"),
-        Stmt::For {
+        st!(StmtNode::For {
             item_name: "_".to_string(),
-            iterator: Expr::Identifier("list".to_string()),
-            body: Box::new(Stmt::Expression(Expr::Block(vec![Stmt::Continue]))),
-        }
+            iterator: ex!(ExprNode::Identifier("list".to_string())),
+            body: sn!(StmtNode::Expression(ex!(ExprNode::Block(vec![st!(StmtNode::Continue)])))),
+        })
     );
 }
 
@@ -919,30 +941,30 @@ fn test_condition_not_confused_with_struct_init() {
     // Heads of if/while/for/switch parse expressions with allow_struct = false
     assert_eq!(
         parse_stmt_src("if active { return true; }"),
-        Stmt::If {
-            condition: Expr::Identifier("active".to_string()),
-            then_branch: Box::new(Stmt::Expression(Expr::Block(vec![Stmt::Return(Some(
-                Expr::Literal(Literal::Bool(true))
-            ))]))),
+        st!(StmtNode::If {
+            condition: ex!(ExprNode::Identifier("active".to_string())),
+            then_branch: sn!(StmtNode::Expression(ex!(ExprNode::Block(vec![st!(StmtNode::Return(Some(
+                ex!(ExprNode::Literal(Literal::Bool(true)))
+            )))])))),
             else_branch: None,
-        }
+        })
     );
 
     assert_eq!(
         parse_stmt_src("while running { break; }"),
-        Stmt::While {
-            condition: Expr::Identifier("running".to_string()),
-            body: Box::new(Stmt::Expression(Expr::Block(vec![Stmt::Break]))),
-        }
+        st!(StmtNode::While {
+            condition: ex!(ExprNode::Identifier("running".to_string())),
+            body: sn!(StmtNode::Expression(ex!(ExprNode::Block(vec![st!(StmtNode::Break)])))),
+        })
     );
 
     assert_eq!(
         parse_stmt_src("for x in items { continue; }"),
-        Stmt::For {
+        st!(StmtNode::For {
             item_name: "x".to_string(),
-            iterator: Expr::Identifier("items".to_string()),
-            body: Box::new(Stmt::Expression(Expr::Block(vec![Stmt::Continue]))),
-        }
+            iterator: ex!(ExprNode::Identifier("items".to_string())),
+            body: sn!(StmtNode::Expression(ex!(ExprNode::Block(vec![st!(StmtNode::Continue)])))),
+        })
     );
 }
 
@@ -950,10 +972,10 @@ fn test_condition_not_confused_with_struct_init() {
 fn test_struct_init_allowed_inside_parens_in_condition() {
     // Parentheses re-enable struct init in conditional contexts
     let stmt = parse_stmt_src(r#"if (User { active: true }).active { return true; }"#);
-    match stmt {
-        Stmt::If { condition, .. } => match condition {
-            Expr::MemberAccess { object, .. } => match *object {
-                Expr::StructInit { name, fields } => {
+    match &stmt.node {
+        StmtNode::If { condition, .. } => match &condition.node {
+            ExprNode::MemberAccess { object, .. } => match &object.node {
+                ExprNode::StructInit { name, fields } => {
                     assert_eq!(name, "User");
                     assert_eq!(fields.len(), 1);
                 }
@@ -967,16 +989,16 @@ fn test_struct_init_allowed_inside_parens_in_condition() {
 
 #[test]
 fn test_break_and_continue_statements() {
-    assert_eq!(parse_stmt_src("break;"), Stmt::Break);
-    assert_eq!(parse_stmt_src("continue;"), Stmt::Continue);
+    assert_eq!(parse_stmt_src("break;"), st!(StmtNode::Break));
+    assert_eq!(parse_stmt_src("continue;"), st!(StmtNode::Continue));
 }
 
 #[test]
 fn test_return_statements() {
-    assert_eq!(parse_stmt_src("return;"), Stmt::Return(None));
+    assert_eq!(parse_stmt_src("return;"), st!(StmtNode::Return(None)));
     assert_eq!(
         parse_stmt_src("return 42;"),
-        Stmt::Return(Some(Expr::Literal(Literal::Int(42))))
+        st!(StmtNode::Return(Some(ex!(ExprNode::Literal(Literal::Int(42))))))
     );
 }
 
@@ -984,11 +1006,11 @@ fn test_return_statements() {
 fn test_yield_statement() {
     assert_eq!(
         parse_stmt_src("yield x * 2;"),
-        Stmt::Yield(Expr::Binary {
-            left: Box::new(Expr::Identifier("x".to_string())),
+        st!(StmtNode::Yield(ex!(ExprNode::Binary {
+            left: en!(ExprNode::Identifier("x".to_string())),
             operator: Token::Star,
-            right: Box::new(Expr::Literal(Literal::Int(2))),
-        })
+            right: en!(ExprNode::Literal(Literal::Int(2))),
+        })))
     );
 }
 
@@ -996,13 +1018,13 @@ fn test_yield_statement() {
 fn test_defer_statement() {
     assert_eq!(
         parse_stmt_src("defer file.close();"),
-        Stmt::Defer(Box::new(Stmt::Expression(Expr::Call {
-            callee: Box::new(Expr::MemberAccess {
-                object: Box::new(Expr::Identifier("file".to_string())),
+        st!(StmtNode::Defer(sn!(StmtNode::Expression(ex!(ExprNode::Call {
+            callee: en!(ExprNode::MemberAccess {
+                object: en!(ExprNode::Identifier("file".to_string())),
                 property: "close".to_string(),
             }),
             arguments: vec![],
-        })))
+        })))))
     );
 }
 
@@ -1010,35 +1032,35 @@ fn test_defer_statement() {
 
 #[test]
 fn test_literals() {
-    assert_eq!(parse_expr_src("42"), Expr::Literal(Literal::Int(42)));
-    assert_eq!(parse_expr_src("3.14"), Expr::Literal(Literal::Float(3.14)));
+    assert_eq!(parse_expr_src("42"), ex!(ExprNode::Literal(Literal::Int(42))));
+    assert_eq!(parse_expr_src("3.14"), ex!(ExprNode::Literal(Literal::Float(3.14))));
     assert_eq!(
         parse_expr_src(r#""hello""#),
-        Expr::Literal(Literal::String("hello".to_string()))
+        ex!(ExprNode::Literal(Literal::String("hello".to_string())))
     );
     assert_eq!(
         parse_expr_src("`raw string`"),
-        Expr::Literal(Literal::String("raw string".to_string()))
+        ex!(ExprNode::Literal(Literal::String("raw string".to_string())))
     );
-    assert_eq!(parse_expr_src("true"), Expr::Literal(Literal::Bool(true)));
-    assert_eq!(parse_expr_src("false"), Expr::Literal(Literal::Bool(false)));
+    assert_eq!(parse_expr_src("true"), ex!(ExprNode::Literal(Literal::Bool(true))));
+    assert_eq!(parse_expr_src("false"), ex!(ExprNode::Literal(Literal::Bool(false))));
 }
 
 #[test]
 fn test_identifiers_and_self() {
     assert_eq!(
         parse_expr_src("my_var"),
-        Expr::Identifier("my_var".to_string())
+        ex!(ExprNode::Identifier("my_var".to_string()))
     );
-    assert_eq!(parse_expr_src("_"), Expr::Identifier("_".to_string()));
-    assert_eq!(parse_expr_src("self"), Expr::SelfKw);
+    assert_eq!(parse_expr_src("_"), ex!(ExprNode::Identifier("_".to_string())));
+    assert_eq!(parse_expr_src("self"), ex!(ExprNode::SelfKw));
 }
 
 #[test]
 fn test_ecode_literal_standalone() {
     assert_eq!(
         parse_expr_src("#NotFound"),
-        Expr::ECodeLit("NotFound".to_string())
+        ex!(ExprNode::ECodeLit("NotFound".to_string()))
     );
 }
 
@@ -1046,14 +1068,14 @@ fn test_ecode_literal_standalone() {
 fn test_ecode_literal_in_comparison() {
     assert_eq!(
         parse_expr_src("e.code == #NotFound"),
-        Expr::Binary {
-            left: Box::new(Expr::MemberAccess {
-                object: Box::new(Expr::Identifier("e".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::MemberAccess {
+                object: en!(ExprNode::Identifier("e".to_string())),
                 property: "code".to_string(),
             }),
             operator: Token::EqEq,
-            right: Box::new(Expr::ECodeLit("NotFound".to_string())),
-        }
+            right: en!(ExprNode::ECodeLit("NotFound".to_string())),
+        })
     );
 }
 
@@ -1061,10 +1083,10 @@ fn test_ecode_literal_in_comparison() {
 fn test_enum_variant_standalone() {
     assert_eq!(
         parse_expr_src("Status::Active"),
-        Expr::EnumVariant {
+        ex!(ExprNode::EnumVariant {
             enum_name: "Status".to_string(),
             variant: "Active".to_string(),
-        }
+        })
     );
 }
 
@@ -1072,17 +1094,17 @@ fn test_enum_variant_standalone() {
 fn test_enum_variant_in_comparison() {
     assert_eq!(
         parse_expr_src("Status::Active == Status::Pending"),
-        Expr::Binary {
-            left: Box::new(Expr::EnumVariant {
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::EnumVariant {
                 enum_name: "Status".to_string(),
                 variant: "Active".to_string(),
             }),
             operator: Token::EqEq,
-            right: Box::new(Expr::EnumVariant {
+            right: en!(ExprNode::EnumVariant {
                 enum_name: "Status".to_string(),
                 variant: "Pending".to_string(),
             }),
-        }
+        })
     );
 }
 
@@ -1098,24 +1120,24 @@ fn test_double_colon_left_must_be_ident() {
 fn test_unary_operators() {
     assert_eq!(
         parse_expr_src("-13"),
-        Expr::Unary {
+        ex!(ExprNode::Unary {
             operator: Token::Minus,
-            right: Box::new(Expr::Literal(Literal::Int(13))),
-        }
+            right: en!(ExprNode::Literal(Literal::Int(13))),
+        })
     );
     assert_eq!(
         parse_expr_src("!active"),
-        Expr::Unary {
+        ex!(ExprNode::Unary {
             operator: Token::Not,
-            right: Box::new(Expr::Identifier("active".to_string())),
-        }
+            right: en!(ExprNode::Identifier("active".to_string())),
+        })
     );
     assert_eq!(
         parse_expr_src("~mask"),
-        Expr::Unary {
+        ex!(ExprNode::Unary {
             operator: Token::BitNot,
-            right: Box::new(Expr::Identifier("mask".to_string())),
-        }
+            right: en!(ExprNode::Identifier("mask".to_string())),
+        })
     );
 }
 
@@ -1123,15 +1145,15 @@ fn test_unary_operators() {
 fn test_grouping_overrides_precedence() {
     assert_eq!(
         parse_expr_src("(2 + 3) * 4"),
-        Expr::Binary {
-            left: Box::new(Expr::Binary {
-                left: Box::new(Expr::Literal(Literal::Int(2))),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Binary {
+                left: en!(ExprNode::Literal(Literal::Int(2))),
                 operator: Token::Plus,
-                right: Box::new(Expr::Literal(Literal::Int(3))),
+                right: en!(ExprNode::Literal(Literal::Int(3))),
             }),
             operator: Token::Star,
-            right: Box::new(Expr::Literal(Literal::Int(4))),
-        }
+            right: en!(ExprNode::Literal(Literal::Int(4))),
+        })
     );
 }
 
@@ -1140,43 +1162,43 @@ fn test_precedence_factor_over_term() {
     // 2 + 3 * 4 -> 2 + (3 * 4)
     assert_eq!(
         parse_expr_src("2 + 3 * 4"),
-        Expr::Binary {
-            left: Box::new(Expr::Literal(Literal::Int(2))),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Literal(Literal::Int(2))),
             operator: Token::Plus,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Literal(Literal::Int(3))),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Literal(Literal::Int(3))),
                 operator: Token::Star,
-                right: Box::new(Expr::Literal(Literal::Int(4))),
+                right: en!(ExprNode::Literal(Literal::Int(4))),
             }),
-        }
+        })
     );
 
     // 10 - 8 / 2 -> 10 - (8 / 2)
     assert_eq!(
         parse_expr_src("10 - 8 / 2"),
-        Expr::Binary {
-            left: Box::new(Expr::Literal(Literal::Int(10))),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Literal(Literal::Int(10))),
             operator: Token::Minus,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Literal(Literal::Int(8))),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Literal(Literal::Int(8))),
                 operator: Token::Slash,
-                right: Box::new(Expr::Literal(Literal::Int(2))),
+                right: en!(ExprNode::Literal(Literal::Int(2))),
             }),
-        }
+        })
     );
 
     // 5 + 7 % 3 -> 5 + (7 % 3)
     assert_eq!(
         parse_expr_src("5 + 7 % 3"),
-        Expr::Binary {
-            left: Box::new(Expr::Literal(Literal::Int(5))),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Literal(Literal::Int(5))),
             operator: Token::Plus,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Literal(Literal::Int(7))),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Literal(Literal::Int(7))),
                 operator: Token::Percent,
-                right: Box::new(Expr::Literal(Literal::Int(3))),
+                right: en!(ExprNode::Literal(Literal::Int(3))),
             }),
-        }
+        })
     );
 }
 
@@ -1185,15 +1207,15 @@ fn test_precedence_term_over_shift() {
     // a << 1 + 2 -> a << (1 + 2)
     assert_eq!(
         parse_expr_src("a << 1 + 2"),
-        Expr::Binary {
-            left: Box::new(Expr::Identifier("a".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Identifier("a".to_string())),
             operator: Token::Shl,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Literal(Literal::Int(1))),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Literal(Literal::Int(1))),
                 operator: Token::Plus,
-                right: Box::new(Expr::Literal(Literal::Int(2))),
+                right: en!(ExprNode::Literal(Literal::Int(2))),
             }),
-        }
+        })
     );
 }
 
@@ -1202,15 +1224,15 @@ fn test_precedence_shift_over_comparison() {
     // a < b << 1 -> a < (b << 1)
     assert_eq!(
         parse_expr_src("a < b << 1"),
-        Expr::Binary {
-            left: Box::new(Expr::Identifier("a".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Identifier("a".to_string())),
             operator: Token::Lt,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Identifier("b".to_string())),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("b".to_string())),
                 operator: Token::Shl,
-                right: Box::new(Expr::Literal(Literal::Int(1))),
+                right: en!(ExprNode::Literal(Literal::Int(1))),
             }),
-        }
+        })
     );
 }
 
@@ -1219,15 +1241,15 @@ fn test_precedence_comparison_over_equality() {
     // a == b < c -> a == (b < c)
     assert_eq!(
         parse_expr_src("a == b < c"),
-        Expr::Binary {
-            left: Box::new(Expr::Identifier("a".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Identifier("a".to_string())),
             operator: Token::EqEq,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Identifier("b".to_string())),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("b".to_string())),
                 operator: Token::Lt,
-                right: Box::new(Expr::Identifier("c".to_string())),
+                right: en!(ExprNode::Identifier("c".to_string())),
             }),
-        }
+        })
     );
 }
 
@@ -1236,15 +1258,15 @@ fn test_precedence_equality_over_bitand() {
     // a & b == c -> a & (b == c)
     assert_eq!(
         parse_expr_src("a & b == c"),
-        Expr::Binary {
-            left: Box::new(Expr::Identifier("a".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Identifier("a".to_string())),
             operator: Token::BitAnd,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Identifier("b".to_string())),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("b".to_string())),
                 operator: Token::EqEq,
-                right: Box::new(Expr::Identifier("c".to_string())),
+                right: en!(ExprNode::Identifier("c".to_string())),
             }),
-        }
+        })
     );
 }
 
@@ -1253,15 +1275,15 @@ fn test_precedence_bitand_over_bitxor() {
     // a ^ b & c -> a ^ (b & c)
     assert_eq!(
         parse_expr_src("a ^ b & c"),
-        Expr::Binary {
-            left: Box::new(Expr::Identifier("a".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Identifier("a".to_string())),
             operator: Token::BitXor,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Identifier("b".to_string())),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("b".to_string())),
                 operator: Token::BitAnd,
-                right: Box::new(Expr::Identifier("c".to_string())),
+                right: en!(ExprNode::Identifier("c".to_string())),
             }),
-        }
+        })
     );
 }
 
@@ -1270,15 +1292,15 @@ fn test_precedence_bitxor_over_bitor() {
     // a | b ^ c -> a | (b ^ c)
     assert_eq!(
         parse_expr_src("a | b ^ c"),
-        Expr::Binary {
-            left: Box::new(Expr::Identifier("a".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Identifier("a".to_string())),
             operator: Token::BitOr,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Identifier("b".to_string())),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("b".to_string())),
                 operator: Token::BitXor,
-                right: Box::new(Expr::Identifier("c".to_string())),
+                right: en!(ExprNode::Identifier("c".to_string())),
             }),
-        }
+        })
     );
 }
 
@@ -1287,15 +1309,15 @@ fn test_precedence_bitor_over_and() {
     // a && b | c -> a && (b | c)
     assert_eq!(
         parse_expr_src("a && b | c"),
-        Expr::Binary {
-            left: Box::new(Expr::Identifier("a".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Identifier("a".to_string())),
             operator: Token::And,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Identifier("b".to_string())),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("b".to_string())),
                 operator: Token::BitOr,
-                right: Box::new(Expr::Identifier("c".to_string())),
+                right: en!(ExprNode::Identifier("c".to_string())),
             }),
-        }
+        })
     );
 }
 
@@ -1304,15 +1326,15 @@ fn test_precedence_and_over_or() {
     // a || b && c -> a || (b && c)
     assert_eq!(
         parse_expr_src("a || b && c"),
-        Expr::Binary {
-            left: Box::new(Expr::Identifier("a".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Identifier("a".to_string())),
             operator: Token::Or,
-            right: Box::new(Expr::Binary {
-                left: Box::new(Expr::Identifier("b".to_string())),
+            right: en!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("b".to_string())),
                 operator: Token::And,
-                right: Box::new(Expr::Identifier("c".to_string())),
+                right: en!(ExprNode::Identifier("c".to_string())),
             }),
-        }
+        })
     );
 }
 
@@ -1321,29 +1343,29 @@ fn test_left_associativity_arithmetic() {
     // 5 - 3 - 1 -> (5 - 3) - 1
     assert_eq!(
         parse_expr_src("5 - 3 - 1"),
-        Expr::Binary {
-            left: Box::new(Expr::Binary {
-                left: Box::new(Expr::Literal(Literal::Int(5))),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Binary {
+                left: en!(ExprNode::Literal(Literal::Int(5))),
                 operator: Token::Minus,
-                right: Box::new(Expr::Literal(Literal::Int(3))),
+                right: en!(ExprNode::Literal(Literal::Int(3))),
             }),
             operator: Token::Minus,
-            right: Box::new(Expr::Literal(Literal::Int(1))),
-        }
+            right: en!(ExprNode::Literal(Literal::Int(1))),
+        })
     );
 
     // 8 / 4 / 2 -> (8 / 4) / 2
     assert_eq!(
         parse_expr_src("8 / 4 / 2"),
-        Expr::Binary {
-            left: Box::new(Expr::Binary {
-                left: Box::new(Expr::Literal(Literal::Int(8))),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Binary {
+                left: en!(ExprNode::Literal(Literal::Int(8))),
                 operator: Token::Slash,
-                right: Box::new(Expr::Literal(Literal::Int(4))),
+                right: en!(ExprNode::Literal(Literal::Int(4))),
             }),
             operator: Token::Slash,
-            right: Box::new(Expr::Literal(Literal::Int(2))),
-        }
+            right: en!(ExprNode::Literal(Literal::Int(2))),
+        })
     );
 }
 
@@ -1352,15 +1374,15 @@ fn test_left_associativity_comparisons() {
     // a < b < c -> (a < b) < c
     assert_eq!(
         parse_expr_src("a < b < c"),
-        Expr::Binary {
-            left: Box::new(Expr::Binary {
-                left: Box::new(Expr::Identifier("a".to_string())),
+        ex!(ExprNode::Binary {
+            left: en!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("a".to_string())),
                 operator: Token::Lt,
-                right: Box::new(Expr::Identifier("b".to_string())),
+                right: en!(ExprNode::Identifier("b".to_string())),
             }),
             operator: Token::Lt,
-            right: Box::new(Expr::Identifier("c".to_string())),
-        }
+            right: en!(ExprNode::Identifier("c".to_string())),
+        })
     );
 }
 
@@ -1370,13 +1392,13 @@ fn test_left_associativity_comparisons() {
 fn test_function_call_positional() {
     assert_eq!(
         parse_expr_src("foo(1, 2)"),
-        Expr::Call {
-            callee: Box::new(Expr::Identifier("foo".to_string())),
+        ex!(ExprNode::Call {
+            callee: en!(ExprNode::Identifier("foo".to_string())),
             arguments: vec![
-                (None, Expr::Literal(Literal::Int(1))),
-                (None, Expr::Literal(Literal::Int(2))),
+                (None, ex!(ExprNode::Literal(Literal::Int(1)))),
+                (None, ex!(ExprNode::Literal(Literal::Int(2)))),
             ],
-        }
+        })
     );
 }
 
@@ -1384,16 +1406,16 @@ fn test_function_call_positional() {
 fn test_function_call_named_arguments() {
     assert_eq!(
         parse_expr_src(r#"connect(host="localhost", port=8080)"#),
-        Expr::Call {
-            callee: Box::new(Expr::Identifier("connect".to_string())),
+        ex!(ExprNode::Call {
+            callee: en!(ExprNode::Identifier("connect".to_string())),
             arguments: vec![
                 (
                     Some("host".to_string()),
-                    Expr::Literal(Literal::String("localhost".to_string()))
+                    ex!(ExprNode::Literal(Literal::String("localhost".to_string())))
                 ),
-                (Some("port".to_string()), Expr::Literal(Literal::Int(8080))),
+                (Some("port".to_string()), ex!(ExprNode::Literal(Literal::Int(8080)))),
             ],
-        }
+        })
     );
 }
 
@@ -1401,13 +1423,13 @@ fn test_function_call_named_arguments() {
 fn test_function_call_mixed_arguments() {
     assert_eq!(
         parse_expr_src(r#"connect("localhost", port=8080)"#),
-        Expr::Call {
-            callee: Box::new(Expr::Identifier("connect".to_string())),
+        ex!(ExprNode::Call {
+            callee: en!(ExprNode::Identifier("connect".to_string())),
             arguments: vec![
-                (None, Expr::Literal(Literal::String("localhost".to_string()))),
-                (Some("port".to_string()), Expr::Literal(Literal::Int(8080))),
+                (None, ex!(ExprNode::Literal(Literal::String("localhost".to_string())))),
+                (Some("port".to_string()), ex!(ExprNode::Literal(Literal::Int(8080)))),
             ],
-        }
+        })
     );
 }
 
@@ -1415,13 +1437,13 @@ fn test_function_call_mixed_arguments() {
 fn test_function_call_trailing_comma() {
     assert_eq!(
         parse_expr_src("foo(1, 2,)"),
-        Expr::Call {
-            callee: Box::new(Expr::Identifier("foo".to_string())),
+        ex!(ExprNode::Call {
+            callee: en!(ExprNode::Identifier("foo".to_string())),
             arguments: vec![
-                (None, Expr::Literal(Literal::Int(1))),
-                (None, Expr::Literal(Literal::Int(2))),
+                (None, ex!(ExprNode::Literal(Literal::Int(1)))),
+                (None, ex!(ExprNode::Literal(Literal::Int(2)))),
             ],
-        }
+        })
     );
 }
 
@@ -1441,13 +1463,13 @@ fn test_invalid_named_argument_target_is_rejected() {
 fn test_member_access_chain() {
     assert_eq!(
         parse_expr_src("user.profile.name"),
-        Expr::MemberAccess {
-            object: Box::new(Expr::MemberAccess {
-                object: Box::new(Expr::Identifier("user".to_string())),
+        ex!(ExprNode::MemberAccess {
+            object: en!(ExprNode::MemberAccess {
+                object: en!(ExprNode::Identifier("user".to_string())),
                 property: "profile".to_string(),
             }),
             property: "name".to_string(),
-        }
+        })
     );
 }
 
@@ -1455,13 +1477,13 @@ fn test_member_access_chain() {
 fn test_index_access_chain() {
     assert_eq!(
         parse_expr_src("grid[0][1]"),
-        Expr::Index {
-            list: Box::new(Expr::Index {
-                list: Box::new(Expr::Identifier("grid".to_string())),
-                index: Box::new(Expr::Literal(Literal::Int(0))),
+        ex!(ExprNode::Index {
+            list: en!(ExprNode::Index {
+                list: en!(ExprNode::Identifier("grid".to_string())),
+                index: en!(ExprNode::Literal(Literal::Int(0))),
             }),
-            index: Box::new(Expr::Literal(Literal::Int(1))),
-        }
+            index: en!(ExprNode::Literal(Literal::Int(1))),
+        })
     );
 }
 
@@ -1469,13 +1491,13 @@ fn test_index_access_chain() {
 fn test_chained_call() {
     assert_eq!(
         parse_expr_src("make_adder(5)(3)"),
-        Expr::Call {
-            callee: Box::new(Expr::Call {
-                callee: Box::new(Expr::Identifier("make_adder".to_string())),
-                arguments: vec![(None, Expr::Literal(Literal::Int(5)))],
+        ex!(ExprNode::Call {
+            callee: en!(ExprNode::Call {
+                callee: en!(ExprNode::Identifier("make_adder".to_string())),
+                arguments: vec![(None, ex!(ExprNode::Literal(Literal::Int(5))))],
             }),
-            arguments: vec![(None, Expr::Literal(Literal::Int(3)))],
-        }
+            arguments: vec![(None, ex!(ExprNode::Literal(Literal::Int(3))))],
+        })
     );
 }
 
@@ -1484,16 +1506,16 @@ fn test_propagate_then_member_access() {
     // divide(a, b)?.code -> (divide(a, b)?).code
     assert_eq!(
         parse_expr_src("divide(a, b)?.code"),
-        Expr::MemberAccess {
-            object: Box::new(Expr::PropagateError(Box::new(Expr::Call {
-                callee: Box::new(Expr::Identifier("divide".to_string())),
+        ex!(ExprNode::MemberAccess {
+            object: en!(ExprNode::PropagateError(en!(ExprNode::Call {
+                callee: en!(ExprNode::Identifier("divide".to_string())),
                 arguments: vec![
-                    (None, Expr::Identifier("a".to_string())),
-                    (None, Expr::Identifier("b".to_string())),
+                    (None, ex!(ExprNode::Identifier("a".to_string()))),
+                    (None, ex!(ExprNode::Identifier("b".to_string()))),
                 ],
             }))),
             property: "code".to_string(),
-        }
+        })
     );
 }
 
@@ -1503,11 +1525,11 @@ fn test_propagate_then_member_access() {
 fn test_list_literal() {
     assert_eq!(
         parse_expr_src("[1, 2, 3]"),
-        Expr::List(vec![
-            Expr::Literal(Literal::Int(1)),
-            Expr::Literal(Literal::Int(2)),
-            Expr::Literal(Literal::Int(3)),
-        ])
+        ex!(ExprNode::List(vec![
+            ex!(ExprNode::Literal(Literal::Int(1))),
+            ex!(ExprNode::Literal(Literal::Int(2))),
+            ex!(ExprNode::Literal(Literal::Int(3))),
+        ]))
     );
 }
 
@@ -1515,26 +1537,26 @@ fn test_list_literal() {
 fn test_list_literal_trailing_comma() {
     assert_eq!(
         parse_expr_src("[1, 2,]"),
-        Expr::List(vec![
-            Expr::Literal(Literal::Int(1)),
-            Expr::Literal(Literal::Int(2)),
-        ])
+        ex!(ExprNode::List(vec![
+            ex!(ExprNode::Literal(Literal::Int(1))),
+            ex!(ExprNode::Literal(Literal::Int(2))),
+        ]))
     );
 }
 
 #[test]
 fn test_empty_list_literal() {
-    assert_eq!(parse_expr_src("[]"), Expr::List(vec![]));
+    assert_eq!(parse_expr_src("[]"), ex!(ExprNode::List(vec![])));
 }
 
 #[test]
 fn test_map_literal() {
     assert_eq!(
         parse_expr_src(r#"{"key": 42}"#),
-        Expr::Map(vec![(
-            Expr::Literal(Literal::String("key".to_string())),
-            Expr::Literal(Literal::Int(42)),
-        )])
+        ex!(ExprNode::Map(vec![(
+            ex!(ExprNode::Literal(Literal::String("key".to_string()))),
+            ex!(ExprNode::Literal(Literal::Int(42))),
+        )]))
     );
 }
 
@@ -1542,33 +1564,33 @@ fn test_map_literal() {
 fn test_map_literal_trailing_comma() {
     assert_eq!(
         parse_expr_src(r#"{"a": 1, "b": 2,}"#),
-        Expr::Map(vec![
+        ex!(ExprNode::Map(vec![
             (
-                Expr::Literal(Literal::String("a".to_string())),
-                Expr::Literal(Literal::Int(1)),
+                ex!(ExprNode::Literal(Literal::String("a".to_string()))),
+                ex!(ExprNode::Literal(Literal::Int(1))),
             ),
             (
-                Expr::Literal(Literal::String("b".to_string())),
-                Expr::Literal(Literal::Int(2)),
+                ex!(ExprNode::Literal(Literal::String("b".to_string()))),
+                ex!(ExprNode::Literal(Literal::Int(2))),
             ),
-        ])
+        ]))
     );
 }
 
 #[test]
 fn test_block_vs_map_disambiguation() {
     // Empty braces {} is ALWAYS an empty block, never an empty map
-    assert_eq!(parse_expr_src("{}"), Expr::Block(vec![]));
+    assert_eq!(parse_expr_src("{}"), ex!(ExprNode::Block(vec![])));
 
     // A block starting with a statement keyword must parse as a block
-    match parse_expr_src("{ var x = 5; yield x; }") {
-        Expr::Block(stmts) => assert_eq!(stmts.len(), 2),
+    match parse_expr_src("{ var x = 5; yield x; }").node {
+        ExprNode::Block(stmts) => assert_eq!(stmts.len(), 2),
         other => panic!("Expected Block, got {:?}", other),
     }
 
     // A block with an expression statement followed by ';' is a block
-    match parse_expr_src("{ foo(); }") {
-        Expr::Block(stmts) => assert_eq!(stmts.len(), 1),
+    match parse_expr_src("{ foo(); }").node {
+        ExprNode::Block(stmts) => assert_eq!(stmts.len(), 1),
         other => panic!("Expected Block, got {:?}", other),
     }
 }
@@ -1578,16 +1600,16 @@ fn test_block_vs_map_disambiguation() {
 fn test_struct_init_expression() {
     assert_eq!(
         parse_expr_src(r#"User { name: "John", age: 522 }"#),
-        Expr::StructInit {
+        ex!(ExprNode::StructInit {
             name: "User".to_string(),
             fields: vec![
                 (
                     "name".to_string(),
-                    Expr::Literal(Literal::String("John".to_string()))
+                    ex!(ExprNode::Literal(Literal::String("John".to_string())))
                 ),
-                ("age".to_string(), Expr::Literal(Literal::Int(522))),
+                ("age".to_string(), ex!(ExprNode::Literal(Literal::Int(522)))),
             ],
-        }
+        })
     );
 }
 
@@ -1595,13 +1617,13 @@ fn test_struct_init_expression() {
 fn test_struct_init_trailing_comma() {
     assert_eq!(
         parse_expr_src("Point { x: 1, y: 2, }"),
-        Expr::StructInit {
+        ex!(ExprNode::StructInit {
             name: "Point".to_string(),
             fields: vec![
-                ("x".to_string(), Expr::Literal(Literal::Int(1))),
-                ("y".to_string(), Expr::Literal(Literal::Int(2))),
+                ("x".to_string(), ex!(ExprNode::Literal(Literal::Int(1)))),
+                ("y".to_string(), ex!(ExprNode::Literal(Literal::Int(2)))),
             ],
-        }
+        })
     );
 }
 
@@ -1609,16 +1631,16 @@ fn test_struct_init_trailing_comma() {
 fn test_struct_init_nested() {
     assert_eq!(
         parse_expr_src("Outer { inner: Inner { value: 5 } }"),
-        Expr::StructInit {
+        ex!(ExprNode::StructInit {
             name: "Outer".to_string(),
             fields: vec![(
                 "inner".to_string(),
-                Expr::StructInit {
+                ex!(ExprNode::StructInit {
                     name: "Inner".to_string(),
-                    fields: vec![("value".to_string(), Expr::Literal(Literal::Int(5)))],
-                }
+                    fields: vec![("value".to_string(), ex!(ExprNode::Literal(Literal::Int(5))))],
+                })
             )],
-        }
+        })
     );
 }
 
@@ -1628,17 +1650,17 @@ fn test_struct_init_nested() {
 fn test_switch_expression() {
     assert_eq!(
         parse_expr_src("switch status { Status::Active -> 1, default -> 0 }"),
-        Expr::Switch {
-            target: Box::new(Expr::Identifier("status".to_string())),
+        ex!(ExprNode::Switch {
+            target: en!(ExprNode::Identifier("status".to_string())),
             arms: vec![(
-                Expr::EnumVariant {
+                ex!(ExprNode::EnumVariant {
                     enum_name: "Status".to_string(),
                     variant: "Active".to_string(),
-                },
-                Expr::Literal(Literal::Int(1)),
+                }),
+                ex!(ExprNode::Literal(Literal::Int(1))),
             )],
-            default_arm: Box::new(Expr::Literal(Literal::Int(0))),
-        }
+            default_arm: en!(ExprNode::Literal(Literal::Int(0))),
+        })
     );
 }
 
@@ -1651,8 +1673,8 @@ fn test_switch_expression_multiple_arms_and_trailing_comma() {
             default -> 0,
         }",
     );
-    match expr {
-        Expr::Switch { arms, .. } => assert_eq!(arms.len(), 2),
+    match &expr.node {
+        ExprNode::Switch { arms, .. } => assert_eq!(arms.len(), 2),
         other => panic!("Expected Switch, got {:?}", other),
     }
 }
@@ -1661,11 +1683,11 @@ fn test_switch_expression_multiple_arms_and_trailing_comma() {
 fn test_switch_with_only_default_arm() {
     assert_eq!(
         parse_expr_src("switch x { default -> 42 }"),
-        Expr::Switch {
-            target: Box::new(Expr::Identifier("x".to_string())),
+        ex!(ExprNode::Switch {
+            target: en!(ExprNode::Identifier("x".to_string())),
             arms: vec![],
-            default_arm: Box::new(Expr::Literal(Literal::Int(42))),
-        }
+            default_arm: en!(ExprNode::Literal(Literal::Int(42))),
+        })
     );
 }
 
@@ -1680,13 +1702,13 @@ fn test_switch_missing_default_arm_is_rejected() {
 fn test_propagate_error() {
     assert_eq!(
         parse_expr_src("divide(a, b)?"),
-        Expr::PropagateError(Box::new(Expr::Call {
-            callee: Box::new(Expr::Identifier("divide".to_string())),
+        ex!(ExprNode::PropagateError(en!(ExprNode::Call {
+            callee: en!(ExprNode::Identifier("divide".to_string())),
             arguments: vec![
-                (None, Expr::Identifier("a".to_string())),
-                (None, Expr::Identifier("b".to_string())),
+                (None, ex!(ExprNode::Identifier("a".to_string()))),
+                (None, ex!(ExprNode::Identifier("b".to_string()))),
             ],
-        }))
+        })))
     );
 }
 
@@ -1694,10 +1716,10 @@ fn test_propagate_error() {
 fn test_error_constructor_primitive() {
     assert_eq!(
         parse_expr_src(r#"Error(#NotFound, "Item missing")"#),
-        Expr::Error {
+        ex!(ExprNode::Error {
             code: "NotFound".to_string(),
-            message: Box::new(Expr::Literal(Literal::String("Item missing".to_string()))),
-        }
+            message: en!(ExprNode::Literal(Literal::String("Item missing".to_string()))),
+        })
     );
 }
 
@@ -1706,19 +1728,19 @@ fn test_or_inline_literal_desugaring() {
     // "a or 0" desugars in parser to OrFallback with Block([Yield(0)])
     assert_eq!(
         parse_expr_src("divide(a, b) or 0"),
-        Expr::OrFallback {
-            try_expr: Box::new(Expr::Call {
-                callee: Box::new(Expr::Identifier("divide".to_string())),
+        ex!(ExprNode::OrFallback {
+            try_expr: en!(ExprNode::Call {
+                callee: en!(ExprNode::Identifier("divide".to_string())),
                 arguments: vec![
-                    (None, Expr::Identifier("a".to_string())),
-                    (None, Expr::Identifier("b".to_string())),
+                    (None, ex!(ExprNode::Identifier("a".to_string()))),
+                    (None, ex!(ExprNode::Identifier("b".to_string()))),
                 ],
             }),
             error_binding: None,
-            fallback: Box::new(Expr::Block(vec![Stmt::Yield(Expr::Literal(Literal::Int(
+            fallback: en!(ExprNode::Block(vec![st!(StmtNode::Yield(ex!(ExprNode::Literal(Literal::Int(
                 0
-            )))])),
-        }
+            )))))])),
+        })
     );
 }
 
@@ -1726,19 +1748,19 @@ fn test_or_inline_literal_desugaring() {
 fn test_or_inline_variable() {
     assert_eq!(
         parse_expr_src("divide(a, b) or default_val"),
-        Expr::OrFallback {
-            try_expr: Box::new(Expr::Call {
-                callee: Box::new(Expr::Identifier("divide".to_string())),
+        ex!(ExprNode::OrFallback {
+            try_expr: en!(ExprNode::Call {
+                callee: en!(ExprNode::Identifier("divide".to_string())),
                 arguments: vec![
-                    (None, Expr::Identifier("a".to_string())),
-                    (None, Expr::Identifier("b".to_string())),
+                    (None, ex!(ExprNode::Identifier("a".to_string()))),
+                    (None, ex!(ExprNode::Identifier("b".to_string()))),
                 ],
             }),
             error_binding: None,
-            fallback: Box::new(Expr::Block(vec![Stmt::Yield(Expr::Identifier(
+            fallback: en!(ExprNode::Block(vec![st!(StmtNode::Yield(ex!(ExprNode::Identifier(
                 "default_val".to_string()
-            ))])),
-        }
+            ))))])),
+        })
     );
 }
 
@@ -1746,21 +1768,21 @@ fn test_or_inline_variable() {
 fn test_or_inline_complex_expression() {
     assert_eq!(
         parse_expr_src("divide(a, b) or a + b"),
-        Expr::OrFallback {
-            try_expr: Box::new(Expr::Call {
-                callee: Box::new(Expr::Identifier("divide".to_string())),
+        ex!(ExprNode::OrFallback {
+            try_expr: en!(ExprNode::Call {
+                callee: en!(ExprNode::Identifier("divide".to_string())),
                 arguments: vec![
-                    (None, Expr::Identifier("a".to_string())),
-                    (None, Expr::Identifier("b".to_string())),
+                    (None, ex!(ExprNode::Identifier("a".to_string()))),
+                    (None, ex!(ExprNode::Identifier("b".to_string()))),
                 ],
             }),
             error_binding: None,
-            fallback: Box::new(Expr::Block(vec![Stmt::Yield(Expr::Binary {
-                left: Box::new(Expr::Identifier("a".to_string())),
+            fallback: en!(ExprNode::Block(vec![st!(StmtNode::Yield(ex!(ExprNode::Binary {
+                left: en!(ExprNode::Identifier("a".to_string())),
                 operator: Token::Plus,
-                right: Box::new(Expr::Identifier("b".to_string())),
-            })])),
-        }
+                right: en!(ExprNode::Identifier("b".to_string())),
+            })))])),
+        })
     );
 }
 
@@ -1768,19 +1790,19 @@ fn test_or_inline_complex_expression() {
 fn test_or_block_no_binding() {
     assert_eq!(
         parse_expr_src("divide(a, b) or { yield 0; }"),
-        Expr::OrFallback {
-            try_expr: Box::new(Expr::Call {
-                callee: Box::new(Expr::Identifier("divide".to_string())),
+        ex!(ExprNode::OrFallback {
+            try_expr: en!(ExprNode::Call {
+                callee: en!(ExprNode::Identifier("divide".to_string())),
                 arguments: vec![
-                    (None, Expr::Identifier("a".to_string())),
-                    (None, Expr::Identifier("b".to_string())),
+                    (None, ex!(ExprNode::Identifier("a".to_string()))),
+                    (None, ex!(ExprNode::Identifier("b".to_string()))),
                 ],
             }),
             error_binding: None,
-            fallback: Box::new(Expr::Block(vec![Stmt::Yield(Expr::Literal(Literal::Int(
+            fallback: en!(ExprNode::Block(vec![st!(StmtNode::Yield(ex!(ExprNode::Literal(Literal::Int(
                 0
-            )))])),
-        }
+            )))))])),
+        })
     );
 }
 
@@ -1788,19 +1810,19 @@ fn test_or_block_no_binding() {
 fn test_or_block_with_binding() {
     assert_eq!(
         parse_expr_src("divide(a, b) or (e) { yield 0; }"),
-        Expr::OrFallback {
-            try_expr: Box::new(Expr::Call {
-                callee: Box::new(Expr::Identifier("divide".to_string())),
+        ex!(ExprNode::OrFallback {
+            try_expr: en!(ExprNode::Call {
+                callee: en!(ExprNode::Identifier("divide".to_string())),
                 arguments: vec![
-                    (None, Expr::Identifier("a".to_string())),
-                    (None, Expr::Identifier("b".to_string())),
+                    (None, ex!(ExprNode::Identifier("a".to_string()))),
+                    (None, ex!(ExprNode::Identifier("b".to_string()))),
                 ],
             }),
             error_binding: Some("e".to_string()),
-            fallback: Box::new(Expr::Block(vec![Stmt::Yield(Expr::Literal(Literal::Int(
+            fallback: en!(ExprNode::Block(vec![st!(StmtNode::Yield(ex!(ExprNode::Literal(Literal::Int(
                 0
-            )))])),
-        }
+            )))))])),
+        })
     );
 }
 
@@ -1808,19 +1830,19 @@ fn test_or_block_with_binding() {
 fn test_or_inline_with_binding() {
     assert_eq!(
         parse_expr_src("divide(a, b) or (e) 0"),
-        Expr::OrFallback {
-            try_expr: Box::new(Expr::Call {
-                callee: Box::new(Expr::Identifier("divide".to_string())),
+        ex!(ExprNode::OrFallback {
+            try_expr: en!(ExprNode::Call {
+                callee: en!(ExprNode::Identifier("divide".to_string())),
                 arguments: vec![
-                    (None, Expr::Identifier("a".to_string())),
-                    (None, Expr::Identifier("b".to_string())),
+                    (None, ex!(ExprNode::Identifier("a".to_string()))),
+                    (None, ex!(ExprNode::Identifier("b".to_string()))),
                 ],
             }),
             error_binding: Some("e".to_string()),
-            fallback: Box::new(Expr::Block(vec![Stmt::Yield(Expr::Literal(Literal::Int(
+            fallback: en!(ExprNode::Block(vec![st!(StmtNode::Yield(ex!(ExprNode::Literal(Literal::Int(
                 0
-            )))])),
-        }
+            )))))])),
+        })
     );
 }
 
@@ -1836,7 +1858,7 @@ fn test_or_multiple_bindings_is_rejected() {
 fn test_plain_string_is_literal() {
     assert_eq!(
         parse_expr_src(r#""no interpolation here""#),
-        Expr::Literal(Literal::String("no interpolation here".to_string()))
+        ex!(ExprNode::Literal(Literal::String("no interpolation here".to_string())))
     );
 }
 
@@ -1844,11 +1866,11 @@ fn test_plain_string_is_literal() {
 fn test_interpolated_string_simple() {
     assert_eq!(
         parse_expr_src(r#""Hello ${name}!""#),
-        Expr::InterpolatedString(vec![
+        ex!(ExprNode::InterpolatedString(vec![
             StringSegment::Literal("Hello ".to_string()),
-            StringSegment::Expr(Box::new(Expr::Identifier("name".to_string()))),
+            StringSegment::Expr(en!(ExprNode::Identifier("name".to_string()))),
             StringSegment::Literal("!".to_string()),
-        ])
+        ]))
     );
 }
 
@@ -1856,13 +1878,13 @@ fn test_interpolated_string_simple() {
 fn test_interpolated_string_with_member_access() {
     assert_eq!(
         parse_expr_src(r#""User: ${user.name}""#),
-        Expr::InterpolatedString(vec![
+        ex!(ExprNode::InterpolatedString(vec![
             StringSegment::Literal("User: ".to_string()),
-            StringSegment::Expr(Box::new(Expr::MemberAccess {
-                object: Box::new(Expr::Identifier("user".to_string())),
+            StringSegment::Expr(en!(ExprNode::MemberAccess {
+                object: en!(ExprNode::Identifier("user".to_string())),
                 property: "name".to_string(),
             })),
-        ])
+        ]))
     );
 }
 
@@ -1870,14 +1892,14 @@ fn test_interpolated_string_with_member_access() {
 fn test_interpolated_string_with_complex_expression() {
     assert_eq!(
         parse_expr_src(r#""Result: ${1 + 2}""#),
-        Expr::InterpolatedString(vec![
+        ex!(ExprNode::InterpolatedString(vec![
             StringSegment::Literal("Result: ".to_string()),
-            StringSegment::Expr(Box::new(Expr::Binary {
-                left: Box::new(Expr::Literal(Literal::Int(1))),
+            StringSegment::Expr(en!(ExprNode::Binary {
+                left: en!(ExprNode::Literal(Literal::Int(1))),
                 operator: Token::Plus,
-                right: Box::new(Expr::Literal(Literal::Int(2))),
+                right: en!(ExprNode::Literal(Literal::Int(2))),
             })),
-        ])
+        ]))
     );
 }
 
@@ -1920,4 +1942,105 @@ fn test_parser_unclosed_parenthesis_is_rejected() {
 #[test]
 fn test_lexer_error_propagates_through_try_parse() {
     assert!(try_parse("fn _t() { var x = $; }").is_err());
+}
+
+
+// SPAN ACCURACY TESTS (Part 3 §10.2 G3-3)
+
+#[test]
+fn test_span_binary_expression_accuracy() {
+    let prog = parse("fn main() {\n    a + b;\n}");
+    match &prog.items[0] {
+        Item::Function(f) => match &f.body[0].node {
+            StmtNode::Expression(expr) => {
+                assert_eq!(expr.span, Span::new(2, 5));
+                match &expr.node {
+                    ExprNode::Binary { left, right, .. } => {
+                        assert_eq!(left.span, Span::new(2, 5));
+                        assert_eq!(right.span, Span::new(2, 9));
+                    }
+                    _ => panic!("Expected Binary expression"),
+                }
+            }
+            _ => panic!("Expected expression stmt"),
+        },
+        _ => panic!("Expected Function"),
+    }
+}
+
+#[test]
+fn test_span_statement_accuracy() {
+    let prog = parse("fn main() {\n    var x = 5;\n}");
+    match &prog.items[0] {
+        Item::Function(f) => {
+            let stmt = &f.body[0];
+            assert_eq!(stmt.span, Span::new(2, 5));
+            match &stmt.node {
+                StmtNode::VarDecl { initializer, .. } => {
+                    assert_eq!(initializer.as_ref().unwrap().span, Span::new(2, 13));
+                }
+                _ => panic!("Expected VarDecl statement"),
+            }
+        }
+        _ => panic!("Expected Function"),
+    }
+}
+
+#[test]
+fn test_span_item_function_accuracy() {
+    let item = parse_single_item("fn foo() {}");
+    assert_eq!(item.span(), Span::new(1, 1));
+    match item {
+        Item::Function(f) => {
+            assert_eq!(f.span, Span::new(1, 1));
+        }
+        _ => panic!("Expected Function item"),
+    }
+}
+
+#[test]
+fn test_span_item_struct_and_fields_accuracy() {
+    let item = parse_single_item("struct User {\n    name: String,\n    age: Int,\n}");
+    assert_eq!(item.span(), Span::new(1, 1));
+    match item {
+        Item::Struct { fields, .. } => {
+            assert_eq!(fields[0].span, Span::new(2, 5));
+            assert_eq!(fields[1].span, Span::new(3, 5));
+        }
+        _ => panic!("Expected Struct item"),
+    }
+}
+
+#[test]
+fn test_span_multiline_construct_anchors_at_start() {
+    let prog = parse("fn main() {\n    if false {\n        var y = 10;\n    }\n}");
+    match &prog.items[0] {
+        Item::Function(f) => {
+            let stmt = &f.body[0];
+            assert_eq!(stmt.span, Span::new(2, 5));
+        }
+        _ => panic!("Expected Function"),
+    }
+}
+
+#[test]
+fn test_span_call_expression_accuracy() {
+    let prog = parse("fn main() {\n    foo(bar, 42);\n}");
+    match &prog.items[0] {
+        Item::Function(f) => match &f.body[0].node {
+            StmtNode::Expression(expr) => {
+                assert_eq!(expr.span, Span::new(2, 5));
+                match &expr.node {
+                    ExprNode::Call { callee, arguments } => {
+                        assert_eq!(callee.span, Span::new(2, 5));
+                        assert_eq!(arguments[0].1.span, Span::new(2, 9));
+                        assert_eq!(arguments[1].1.span, Span::new(2, 14));
+                    }
+                    _ => panic!("Expected Call expression"),
+                }
+            }
+            _ => panic!("Expected expression stmt"),
+        },
+        _ => panic!("Expected Function"),
+    }
 }

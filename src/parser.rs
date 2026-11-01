@@ -1,6 +1,7 @@
 use crate::ast::*;
 use crate::error::{CompilerError, CompilerResult};
 use crate::lexer::{SpannedToken, Token};
+use crate::span::Span;
 
 /// The Recursive Descent Parser for Antimatter.
 /// Consumes a flat `Vec<SpannedToken>` and builds a typed AST.
@@ -59,16 +60,20 @@ impl Parser {
         self.peek().map(|st| &st.token) == Some(token_type)
     }
 
-    /// Returns the line/column of the current (not-yet-consumed) token.
-    fn current_pos(&self) -> (usize, usize) {
+    /// Returns the exact Span of the current (not-yet-consumed) token.
+    fn current_span(&self) -> Span {
         if self.is_at_end() {
             if self.tokens.is_empty() {
-                return (1, 1);
+                return Span::new(1, 1);
             }
-            let span = &self.tokens.last().unwrap().span;
-            return (span.line, span.column);
+            return self.tokens.last().unwrap().span;
         }
-        let span = &self.peek().unwrap().span;
+        self.peek().unwrap().span
+    }
+
+    /// Returns the line/column of the current (not-yet-consumed) token.
+    fn current_pos(&self) -> (usize, usize) {
+        let span = self.current_span();
         (span.line, span.column)
     }
 
@@ -142,27 +147,29 @@ impl Parser {
 
     /// Routes the parser to the correct top-level declaration.
     fn parse_item(&mut self) -> CompilerResult<Item> {
+        let item_span = self.current_span();
+
         if self.match_tokens(&[Token::Use]) {
-            return self.parse_use();
+            return self.parse_use(item_span);
         }
         if self.match_tokens(&[Token::Impl]) {
-            return self.parse_impl();
+            return self.parse_impl(item_span);
         }
 
         let (directives, is_pub) = self.parse_modifiers()?;
 
         if self.match_tokens(&[Token::Type]) {
-            return self.parse_type_alias(directives, is_pub);
+            return self.parse_type_alias(directives, is_pub, item_span);
         }
         if self.match_tokens(&[Token::Struct]) {
-            return self.parse_struct(directives, is_pub);
+            return self.parse_struct(directives, is_pub, item_span);
         }
         if self.match_tokens(&[Token::Enum]) {
-            return self.parse_enum(directives, is_pub);
+            return self.parse_enum(directives, is_pub, item_span);
         }
         if self.match_tokens(&[Token::Fn]) {
             return Ok(Item::Function(
-                self.parse_function_decl(directives, is_pub)?,
+                self.parse_function_decl(directives, is_pub, item_span)?,
             ));
         }
 
@@ -178,7 +185,7 @@ impl Parser {
     }
 
     /// Parses `use`
-    fn parse_use(&mut self) -> CompilerResult<Item> {
+    fn parse_use(&mut self, span: Span) -> CompilerResult<Item> {
         let mut path = Vec::new();
         let mut items = Vec::new();
 
@@ -207,13 +214,13 @@ impl Parser {
         }
 
         self.consume(Token::SemiColon, "Expected ';' after 'use' statement")?;
-        Ok(Item::Use { path, items })
+        Ok(Item::Use { path, items, span })
     }
 
     ///Parses Type Aliases.
     ///
     ///eg: `type Port = Int;`
-    fn parse_type_alias(&mut self, directives: Vec<String>, is_pub: bool) -> CompilerResult<Item> {
+    fn parse_type_alias(&mut self, directives: Vec<String>, is_pub: bool, span: Span) -> CompilerResult<Item> {
         let name = self.consume_ident("Expected name for type alias")?;
         self.consume(Token::Assign, "Expected '=' in type alias declaration")?;
         let target_type = self.parse_type()?;
@@ -223,11 +230,12 @@ impl Parser {
             is_pub,
             name,
             target_type,
+            span,
         })
     }
 
     /// Parses Enums
-    fn parse_enum(&mut self, directives: Vec<String>, is_pub: bool) -> CompilerResult<Item> {
+    fn parse_enum(&mut self, directives: Vec<String>, is_pub: bool, span: Span) -> CompilerResult<Item> {
         let name = self.consume_ident("Expected name for enum declaration")?;
         self.consume(Token::LBrace, "Expected '{' before enum values")?;
         let mut values = Vec::new();
@@ -250,11 +258,12 @@ impl Parser {
             is_pub,
             name,
             values,
+            span,
         })
     }
 
     /// Parses a struct definition with optional per-field directives and visibility.
-    fn parse_struct(&mut self, directives: Vec<String>, is_pub: bool) -> CompilerResult<Item> {
+    fn parse_struct(&mut self, directives: Vec<String>, is_pub: bool, span: Span) -> CompilerResult<Item> {
         let name = self.consume_ident("Expected struct name")?;
         self.consume(Token::LBrace, "Expected '{' before struct fields")?;
         let mut fields = Vec::new();
@@ -265,6 +274,7 @@ impl Parser {
                     break;
                 } // trailing comma
 
+                let field_span = self.current_span();
                 let (field_directives, field_is_pub) = self.parse_modifiers()?;
                 let field_name = self.consume_ident("Expected field name")?;
                 self.consume(Token::Colon, "Expected ':' after field name")?;
@@ -275,6 +285,7 @@ impl Parser {
                     is_pub: field_is_pub,
                     name: field_name,
                     type_name: field_type,
+                    span: field_span,
                 });
                 if !self.match_tokens(&[Token::Comma]) {
                     break;
@@ -288,6 +299,7 @@ impl Parser {
             is_pub,
             name,
             fields,
+            span,
         })
     }
 
@@ -296,6 +308,7 @@ impl Parser {
         &mut self,
         directives: Vec<String>,
         is_pub: bool,
+        span: Span,
     ) -> CompilerResult<FunctionDecl> {
         let name = self.consume_ident("Expected function name")?;
         self.consume(Token::LParen, "Expected '(' after function name")?;
@@ -307,6 +320,7 @@ impl Parser {
                     break;
                 } // trailing comma
 
+                let param_span = self.current_span();
                 let param_name = self.consume_ident("Expected parameter name")?;
                 self.consume(Token::Colon, "Expected ':' after parameter name")?;
                 let param_type = self.parse_type()?;
@@ -320,6 +334,7 @@ impl Parser {
                     name: param_name,
                     type_name: param_type,
                     default_value,
+                    span: param_span,
                 });
                 if !self.match_tokens(&[Token::Comma]) {
                     break;
@@ -349,23 +364,25 @@ impl Parser {
             parameters,
             return_type,
             body,
+            span,
         })
     }
 
     /// Parses `impl`
-    fn parse_impl(&mut self) -> CompilerResult<Item> {
+    fn parse_impl(&mut self, span: Span) -> CompilerResult<Item> {
         let target = self.consume_ident("Expected struct name after 'impl'")?;
         self.consume(Token::LBrace, "Expected '{' before impl methods")?;
         let mut methods = Vec::new();
 
         while !self.check(&Token::RBrace) && !self.is_at_end() {
+            let method_span = self.current_span();
             let (directives, is_pub) = self.parse_modifiers()?;
             self.consume(Token::Fn, "Expected 'fn' inside impl block")?;
-            methods.push(self.parse_function_decl(directives, is_pub)?);
+            methods.push(self.parse_function_decl(directives, is_pub, method_span)?);
         }
 
         self.consume(Token::RBrace, "Expected '}' after impl methods")?;
-        Ok(Item::Impl { target, methods })
+        Ok(Item::Impl { target, methods, span })
     }
 
     //TYPE PARSER
@@ -435,44 +452,46 @@ impl Parser {
     //STATEMENT PARSER
     /// Routes to the correct statement parser.
     fn parse_stmt(&mut self) -> CompilerResult<Stmt> {
+        let span = self.current_span();
+
         if self.match_tokens(&[Token::Var]) {
-            return self.parse_var_decl(false);
+            return self.parse_var_decl(false, span);
         }
         if self.match_tokens(&[Token::Const]) {
-            return self.parse_var_decl(true);
+            return self.parse_var_decl(true, span);
         }
         if self.match_tokens(&[Token::If]) {
-            return self.parse_if_stmt();
+            return self.parse_if_stmt(span);
         }
         if self.match_tokens(&[Token::While]) {
-            return self.parse_while_stmt();
+            return self.parse_while_stmt(span);
         }
         if self.match_tokens(&[Token::For]) {
-            return self.parse_for_stmt();
+            return self.parse_for_stmt(span);
         }
         if self.match_tokens(&[Token::Return]) {
-            return self.parse_return_stmt();
+            return self.parse_return_stmt(span);
         }
         if self.match_tokens(&[Token::Break]) {
             self.consume(Token::SemiColon, "Expected ';' after 'break'")?;
-            return Ok(Stmt::Break);
+            return Ok(Stmt::new(StmtNode::Break, span));
         }
         if self.match_tokens(&[Token::Continue]) {
             self.consume(Token::SemiColon, "Expected ';' after 'continue'")?;
-            return Ok(Stmt::Continue);
+            return Ok(Stmt::new(StmtNode::Continue, span));
         }
         if self.match_tokens(&[Token::Yield]) {
-            return self.parse_yield_stmt();
+            return self.parse_yield_stmt(span);
         }
         if self.match_tokens(&[Token::Defer]) {
-            return self.parse_defer_stmt();
+            return self.parse_defer_stmt(span);
         }
 
         self.parse_expression_stmt()
     }
 
     /// Parses variable/constant declarations.
-    fn parse_var_decl(&mut self, is_const: bool) -> CompilerResult<Stmt> {
+    fn parse_var_decl(&mut self, is_const: bool, span: Span) -> CompilerResult<Stmt> {
         let name = self.consume_ident("Expected variable name")?;
 
         let mut type_annotation = None;
@@ -486,96 +505,126 @@ impl Parser {
         }
 
         self.consume(Token::SemiColon, "Expected ';' after variable declaration")?;
-        Ok(Stmt::VarDecl {
-            is_const,
-            name,
-            type_annotation,
-            initializer,
-        })
+        Ok(Stmt::new(
+            StmtNode::VarDecl {
+                is_const,
+                name,
+                type_annotation,
+                initializer,
+            },
+            span,
+        ))
     }
 
     /// Parses `if`
-    fn parse_if_stmt(&mut self) -> CompilerResult<Stmt> {
+    fn parse_if_stmt(&mut self, span: Span) -> CompilerResult<Stmt> {
         let condition = self.parse_expr_no_struct(Precedence::None)?;
 
-        let then_branch = if self.match_tokens(&[Token::LBrace]) {
-            Box::new(Stmt::Expression(Expr::Block(self.parse_block()?)))
+        let then_branch = if self.check(&Token::LBrace) {
+            let block_span = self.current_span();
+            self.advance();
+            Box::new(Stmt::new(
+                StmtNode::Expression(Expr::new(ExprNode::Block(self.parse_block()?), block_span)),
+                block_span,
+            ))
         } else {
             Box::new(self.parse_stmt()?)
         };
 
         let mut else_branch = None;
         if self.match_tokens(&[Token::Else]) {
+            let else_span = self.previous().span;
             if self.match_tokens(&[Token::If]) {
-                else_branch = Some(Box::new(self.parse_if_stmt()?));
-            } else if self.match_tokens(&[Token::LBrace]) {
-                else_branch = Some(Box::new(Stmt::Expression(Expr::Block(self.parse_block()?))));
+                else_branch = Some(Box::new(self.parse_if_stmt(else_span)?));
+            } else if self.check(&Token::LBrace) {
+                let block_span = self.current_span();
+                self.advance();
+                else_branch = Some(Box::new(Stmt::new(
+                    StmtNode::Expression(Expr::new(ExprNode::Block(self.parse_block()?), block_span)),
+                    block_span,
+                )));
             } else {
                 else_branch = Some(Box::new(self.parse_stmt()?));
             }
         }
 
-        Ok(Stmt::If {
-            condition,
-            then_branch,
-            else_branch,
-        })
+        Ok(Stmt::new(
+            StmtNode::If {
+                condition,
+                then_branch,
+                else_branch,
+            },
+            span,
+        ))
     }
 
     /// Parses `while`
-    fn parse_while_stmt(&mut self) -> CompilerResult<Stmt> {
+    fn parse_while_stmt(&mut self, span: Span) -> CompilerResult<Stmt> {
         let condition = self.parse_expr_no_struct(Precedence::None)?;
 
-        let body = if self.match_tokens(&[Token::LBrace]) {
-            Box::new(Stmt::Expression(Expr::Block(self.parse_block()?)))
+        let body = if self.check(&Token::LBrace) {
+            let block_span = self.current_span();
+            self.advance();
+            Box::new(Stmt::new(
+                StmtNode::Expression(Expr::new(ExprNode::Block(self.parse_block()?), block_span)),
+                block_span,
+            ))
         } else {
             Box::new(self.parse_stmt()?)
         };
 
-        Ok(Stmt::While { condition, body })
+        Ok(Stmt::new(StmtNode::While { condition, body }, span))
     }
 
     /// Parses `for` statement
-    fn parse_for_stmt(&mut self) -> CompilerResult<Stmt> {
+    fn parse_for_stmt(&mut self, span: Span) -> CompilerResult<Stmt> {
         let item_name = self.consume_ident("Expected iterator variable name after 'for'")?;
         self.consume(Token::In, "Expected 'in' after for loop variable")?;
 
         let iterator = self.parse_expr_no_struct(Precedence::None)?;
 
-        let body = if self.match_tokens(&[Token::LBrace]) {
-            Box::new(Stmt::Expression(Expr::Block(self.parse_block()?)))
+        let body = if self.check(&Token::LBrace) {
+            let block_span = self.current_span();
+            self.advance();
+            Box::new(Stmt::new(
+                StmtNode::Expression(Expr::new(ExprNode::Block(self.parse_block()?), block_span)),
+                block_span,
+            ))
         } else {
             Box::new(self.parse_stmt()?)
         };
 
-        Ok(Stmt::For {
-            item_name,
-            iterator,
-            body,
-        })
+        Ok(Stmt::new(
+            StmtNode::For {
+                item_name,
+                iterator,
+                body,
+            },
+            span,
+        ))
     }
 
     /// Parses `return;` or `return expr;`
-    fn parse_return_stmt(&mut self) -> CompilerResult<Stmt> {
+    fn parse_return_stmt(&mut self, span: Span) -> CompilerResult<Stmt> {
         let value = if !self.check(&Token::SemiColon) {
             Some(self.parse_expr(Precedence::None)?)
         } else {
             None
         };
         self.consume(Token::SemiColon, "Expected ';' after return statement")?;
-        Ok(Stmt::Return(value))
+        Ok(Stmt::new(StmtNode::Return(value), span))
     }
 
     /// Parses `yield expr;`
-    fn parse_yield_stmt(&mut self) -> CompilerResult<Stmt> {
+    fn parse_yield_stmt(&mut self, span: Span) -> CompilerResult<Stmt> {
         let value = self.parse_expr(Precedence::None)?;
         self.consume(Token::SemiColon, "Expected ';' after yield expression")?;
-        Ok(Stmt::Yield(value))
+        Ok(Stmt::new(StmtNode::Yield(value), span))
     }
 
     /// Parses `defer expr;`
-    fn parse_defer_stmt(&mut self) -> CompilerResult<Stmt> {
-        Ok(Stmt::Defer(Box::new(self.parse_stmt()?)))
+    fn parse_defer_stmt(&mut self, span: Span) -> CompilerResult<Stmt> {
+        Ok(Stmt::new(StmtNode::Defer(Box::new(self.parse_stmt()?)), span))
     }
 
     /// Parses an expression statement or assignment.
@@ -597,12 +646,12 @@ impl Parser {
         ]) {
             let operator = self.previous().token.clone();
 
-            let target = match expr {
-                Expr::Identifier(name) => AssignTarget::Identifier(name),
-                Expr::MemberAccess { object, property } => {
+            let target = match expr.node {
+                ExprNode::Identifier(name) => AssignTarget::Identifier(name),
+                ExprNode::MemberAccess { object, property } => {
                     AssignTarget::MemberAccess { object, property }
                 }
-                Expr::Index { list, index } => AssignTarget::Index { list, index },
+                ExprNode::Index { list, index } => AssignTarget::Index { list, index },
                 _ => {
                     let (line, col) = self.current_pos();
                     return Err(CompilerError::new(
@@ -614,15 +663,19 @@ impl Parser {
 
             let value = self.parse_expr(Precedence::None)?;
             self.consume(Token::SemiColon, "Expected ';' after assignment")?;
-            return Ok(Stmt::Assignment {
-                target,
-                operator,
-                value,
-            });
+            return Ok(Stmt::new(
+                StmtNode::Assignment {
+                    target,
+                    operator,
+                    value,
+                },
+                expr.span,
+            ));
         }
 
         self.consume(Token::SemiColon, "Expected ';' after expression statement")?;
-        Ok(Stmt::Expression(expr))
+        let span = expr.span;
+        Ok(Stmt::new(StmtNode::Expression(expr), span))
     }
 
     //EXPRESSION PARSER (PRATT)
@@ -672,9 +725,6 @@ impl Parser {
         let mut left = self.parse_prefix(allow_struct)?;
 
         while precedence < self.peek_binding_power() {
-            // Capture binding power BEFORE consuming the operator so left-associativity
-            // is correct. (Consuming first and then peeking returns the next token's
-            // power, which makes every binary operator right-associative.)
             let infix_bp = self.peek_binding_power();
             left = self.parse_infix(left, infix_bp, allow_struct)?;
         }
@@ -684,13 +734,16 @@ impl Parser {
 
     /// Parses a prefix (the start of any expression).
     fn parse_prefix(&mut self, allow_struct: bool) -> CompilerResult<Expr> {
+        let span = self.current_span();
         let token = self.advance().token.clone();
 
         match token {
             //Literals
-            Token::IntLit(v) => Ok(Expr::Literal(Literal::Int(v))),
-            Token::FloatLit(v) => Ok(Expr::Literal(Literal::Float(v))),
-            Token::StringLit(v) | Token::RawString(v) => Ok(Expr::Literal(Literal::String(v))),
+            Token::IntLit(v) => Ok(Expr::new(ExprNode::Literal(Literal::Int(v)), span)),
+            Token::FloatLit(v) => Ok(Expr::new(ExprNode::Literal(Literal::Float(v)), span)),
+            Token::StringLit(v) | Token::RawString(v) => {
+                Ok(Expr::new(ExprNode::Literal(Literal::String(v)), span))
+            }
 
             Token::InterpolatedStringLit(parts) => {
                 let mut segments = Vec::new();
@@ -700,7 +753,6 @@ impl Parser {
                             segments.push(StringSegment::Literal(s));
                         }
                         crate::lexer::StringPart::ExprSource(src) => {
-                            // Re lex and reparse the expression source found inside ${}.
                             let inner_tokens = crate::lexer::tokenize(&src)?;
                             let mut inner_parser = Parser::new(inner_tokens);
                             let expr = inner_parser.parse_expr(Precedence::None)?;
@@ -708,37 +760,38 @@ impl Parser {
                         }
                     }
                 }
-                Ok(Expr::InterpolatedString(segments))
+                Ok(Expr::new(ExprNode::InterpolatedString(segments), span))
             }
 
-            Token::True => Ok(Expr::Literal(Literal::Bool(true))),
-            Token::False => Ok(Expr::Literal(Literal::Bool(false))),
-            Token::SelfKw => Ok(Expr::SelfKw),
+            Token::True => Ok(Expr::new(ExprNode::Literal(Literal::Bool(true)), span)),
+            Token::False => Ok(Expr::new(ExprNode::Literal(Literal::Bool(false)), span)),
+            Token::SelfKw => Ok(Expr::new(ExprNode::SelfKw, span)),
 
             //Error constructor
-            Token::Error => self.parse_error_primitive(),
+            Token::Error => self.parse_error_primitive(span),
             Token::Hash => {
                 let code = self.consume_ident("Expected error code name after '#'")?;
-                Ok(Expr::ECodeLit(code))
+                Ok(Expr::new(ExprNode::ECodeLit(code), span))
             }
 
             //Identifier or struct init
             Token::Ident(name) => {
-                // Struct initializer
-                // Only allowed when not in a no-struct context.
                 if allow_struct && self.check(&Token::LBrace) {
-                    return self.parse_struct_init(name);
+                    return self.parse_struct_init(name, span);
                 }
-                Ok(Expr::Identifier(name))
+                Ok(Expr::new(ExprNode::Identifier(name), span))
             }
 
             //Unary prefix operators
             Token::Minus | Token::Not | Token::BitNot => {
                 let right = self.parse_expr_inner(Precedence::Unary, allow_struct)?;
-                Ok(Expr::Unary {
-                    operator: token,
-                    right: Box::new(right),
-                })
+                Ok(Expr::new(
+                    ExprNode::Unary {
+                        operator: token,
+                        right: Box::new(right),
+                    },
+                    span,
+                ))
             }
 
             //Grouped expression
@@ -751,9 +804,9 @@ impl Parser {
             //Block expression or Map literal
             Token::LBrace => {
                 if self.is_map_literal() {
-                    return self.parse_map_literal();
+                    return self.parse_map_literal(span);
                 }
-                Ok(Expr::Block(self.parse_block()?))
+                Ok(Expr::new(ExprNode::Block(self.parse_block()?), span))
             }
 
             //List
@@ -771,7 +824,7 @@ impl Parser {
                     }
                 }
                 self.consume(Token::RBracket, "Expected ']' after list elements")?;
-                Ok(Expr::List(items))
+                Ok(Expr::new(ExprNode::List(items), span))
             }
 
             //Switch expression
@@ -798,8 +851,6 @@ impl Parser {
                     }
                 }
 
-                // Check for missing `default` BEFORE consuming `}` so the error
-                // points at the end of the switch body, not the next line.
                 if default_arm.is_none() {
                     let (line, col) = self.current_pos();
                     return Err(CompilerError::new(
@@ -810,11 +861,14 @@ impl Parser {
                 }
 
                 self.consume(Token::RBrace, "Expected '}' after switch arms")?;
-                Ok(Expr::Switch {
-                    target,
-                    arms,
-                    default_arm: default_arm.unwrap(),
-                })
+                Ok(Expr::new(
+                    ExprNode::Switch {
+                        target,
+                        arms,
+                        default_arm: default_arm.unwrap(),
+                    },
+                    span,
+                ))
             }
 
             _ => {
@@ -835,6 +889,7 @@ impl Parser {
         precedence: Precedence,
         allow_struct: bool,
     ) -> CompilerResult<Expr> {
+        let span = left.span;
         let operator = self.advance().token.clone();
 
         match operator {
@@ -857,24 +912,28 @@ impl Parser {
             | Token::BitXor
             | Token::Shl
             | Token::Shr => {
-                // Pass the captured precedence (not a fresh peek) for correct
-                // left-associativity.
                 let right = self.parse_expr_inner(precedence, allow_struct)?;
-                Ok(Expr::Binary {
-                    left: Box::new(left),
-                    operator,
-                    right: Box::new(right),
-                })
+                Ok(Expr::new(
+                    ExprNode::Binary {
+                        left: Box::new(left),
+                        operator,
+                        right: Box::new(right),
+                    },
+                    span,
+                ))
             }
 
             //Error propagation postfix
-            Token::Question => Ok(Expr::PropagateError(Box::new(left))),
+            Token::Question => Ok(Expr::new(ExprNode::PropagateError(Box::new(left)), span)),
 
             // ::
             Token::DoubleColon => {
                 let variant = self.consume_ident("Expected enum variant name after '::'")?;
-                match left {
-                    Expr::Identifier(enum_name) => Ok(Expr::EnumVariant { enum_name, variant }),
+                match left.node {
+                    ExprNode::Identifier(enum_name) => Ok(Expr::new(
+                        ExprNode::EnumVariant { enum_name, variant },
+                        span,
+                    )),
                     _ => {
                         let (line, col) = self.current_pos();
                         Err(CompilerError::new(
@@ -905,43 +964,60 @@ impl Parser {
                 };
 
                 let fallback = if self.check(&Token::LBrace) {
+                    let block_span = self.current_span();
                     self.advance();
-                    Expr::Block(self.parse_block()?)
+                    Expr::new(ExprNode::Block(self.parse_block()?), block_span)
                 } else {
                     let expr = self.parse_expr(Precedence::None)?;
-                    Expr::Block(vec![Stmt::Yield(expr)])
+                    let expr_span = expr.span;
+                    Expr::new(
+                        ExprNode::Block(vec![Stmt::new(StmtNode::Yield(expr), expr_span)]),
+                        expr_span,
+                    )
                 };
 
-                Ok(Expr::OrFallback {
-                    try_expr: Box::new(left),
-                    error_binding,
-                    fallback: Box::new(fallback),
-                })
+                Ok(Expr::new(
+                    ExprNode::OrFallback {
+                        try_expr: Box::new(left),
+                        error_binding,
+                        fallback: Box::new(fallback),
+                    },
+                    span,
+                ))
             }
 
             //Function call
-            Token::LParen => Ok(Expr::Call {
-                callee: Box::new(left),
-                arguments: self.parse_call_arguments()?,
-            }),
+            Token::LParen => Ok(Expr::new(
+                ExprNode::Call {
+                    callee: Box::new(left),
+                    arguments: self.parse_call_arguments()?,
+                },
+                span,
+            )),
 
             //Member access
             Token::Dot => {
                 let property = self.consume_ident("Expected property name after '.'")?;
-                Ok(Expr::MemberAccess {
-                    object: Box::new(left),
-                    property,
-                })
+                Ok(Expr::new(
+                    ExprNode::MemberAccess {
+                        object: Box::new(left),
+                        property,
+                    },
+                    span,
+                ))
             }
 
             //Index access
             Token::LBracket => {
                 let index = self.parse_expr(Precedence::None)?;
                 self.consume(Token::RBracket, "Expected ']' after index")?;
-                Ok(Expr::Index {
-                    list: Box::new(left),
-                    index: Box::new(index),
-                })
+                Ok(Expr::new(
+                    ExprNode::Index {
+                        list: Box::new(left),
+                        index: Box::new(index),
+                    },
+                    span,
+                ))
             }
 
             _ => unreachable!("Token not in peek_binding_power but reached parse_infix"),
@@ -975,9 +1051,9 @@ impl Parser {
                 let mut value = self.parse_expr(Precedence::None)?;
 
                 if self.match_tokens(&[Token::Assign]) {
-                    if let Expr::Identifier(arg_name) = value {
+                    if let ExprNode::Identifier(arg_name) = &value.node {
                         saw_named = true;
-                        name = Some(arg_name);
+                        name = Some(arg_name.clone());
                         value = self.parse_expr(Precedence::None)?;
                     } else {
                         let (line, col) = self.current_pos();
@@ -1007,23 +1083,27 @@ impl Parser {
         self.consume(Token::RParen, "Expected ')' after function arguments")?;
         Ok(arguments)
     }
+
     /// Parses the built-in Error constructor: `Error(#Code, "message")`
-    fn parse_error_primitive(&mut self) -> CompilerResult<Expr> {
+    fn parse_error_primitive(&mut self, span: Span) -> CompilerResult<Expr> {
         self.consume(Token::LParen, "Expected '(' after 'Error'")?;
         self.consume(Token::Hash, "Expected '#' before error code")?;
         let code = self.consume_ident("Expected error code identifier")?;
         self.consume(Token::Comma, "Expected ',' after error code")?;
         let message = self.parse_expr(Precedence::None)?;
         self.consume(Token::RParen, "Expected ')' after error message")?;
-        Ok(Expr::Error {
-            code,
-            message: Box::new(message),
-        })
+        Ok(Expr::new(
+            ExprNode::Error {
+                code,
+                message: Box::new(message),
+            },
+            span,
+        ))
     }
 
     /// Parses a struct initializer: `User { name: "Stark", age: 280 }`
     /// The struct name has already been consumed by the caller.
-    fn parse_struct_init(&mut self, name: String) -> CompilerResult<Expr> {
+    fn parse_struct_init(&mut self, name: String, span: Span) -> CompilerResult<Expr> {
         self.consume(Token::LBrace, "Expected '{' in struct initializer")?;
         let mut fields = Vec::new();
 
@@ -1034,7 +1114,6 @@ impl Parser {
                 } // trailing comma
                 let field_name = self.consume_ident("Expected field name in struct initializer")?;
                 self.consume(Token::Colon, "Expected ':' after field name")?;
-                // Field values can themselves be struct initializers.
                 let value = self.parse_expr(Precedence::None)?;
                 fields.push((field_name, value));
                 if !self.match_tokens(&[Token::Comma]) {
@@ -1044,22 +1123,17 @@ impl Parser {
         }
 
         self.consume(Token::RBrace, "Expected '}' after struct fields")?;
-        Ok(Expr::StructInit { name, fields })
+        Ok(Expr::new(ExprNode::StructInit { name, fields }, span))
     }
 
     /// Called AFTER the opening `{` has been consumed, so `self.current` points
     /// to the first token inside the braces. `depth` starts at 1 to represent
     /// that we are already one level deep inside the outer `{`.
-    ///
-    /// This is read-only lookahead. it can never fail, so it returns `bool`
-    /// rather than a `CompilerResult`.
     fn is_map_literal(&self) -> bool {
-        //{}
         if self.check(&Token::RBrace) {
             return false;
         }
 
-        // If the first token is a statement keyword, it cannot be a map key.
         if let Some(st) = self.peek() {
             match &st.token {
                 Token::Var
@@ -1077,7 +1151,6 @@ impl Parser {
             }
         }
 
-        // Scan for a colon (map) or a semicolon (block) at the top level.
         let mut depth = 1;
         let mut i = self.current;
 
@@ -1090,8 +1163,8 @@ impl Parser {
                         return false;
                     }
                 }
-                Token::Colon if depth == 1 => return true, // colon -> map
-                Token::SemiColon if depth == 1 => return false, // semicolon -> block
+                Token::Colon if depth == 1 => return true,
+                Token::SemiColon if depth == 1 => return false,
                 _ => {}
             }
             i += 1;
@@ -1101,7 +1174,7 @@ impl Parser {
     }
 
     /// Parses a map literal body. The opening `{` must already be consumed.
-    fn parse_map_literal(&mut self) -> CompilerResult<Expr> {
+    fn parse_map_literal(&mut self, span: Span) -> CompilerResult<Expr> {
         let mut pairs: Vec<(Expr, Expr)> = Vec::new();
 
         if !self.check(&Token::RBrace) {
@@ -1120,6 +1193,6 @@ impl Parser {
         }
 
         self.consume(Token::RBrace, "Expected '}' after map literal")?;
-        Ok(Expr::Map(pairs))
+        Ok(Expr::new(ExprNode::Map(pairs), span))
     }
 }

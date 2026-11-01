@@ -1,4 +1,5 @@
 use crate::lexer::Token;
+use crate::span::Span;
 
 /// Represents a data type
 #[derive(Debug, PartialEq, Clone)]
@@ -31,12 +32,14 @@ pub enum Literal {
     String(String),
     Bool(bool),
 }
+
 /// One segment inside an interpolated string.
 #[derive(Debug, PartialEq, Clone)]
 pub enum StringSegment {
     Literal(String),   // plain text portion
     Expr(Box<Expr>),   // evaluated expression
 }
+
 /// Represents a valid memory location on the Left Hand Side of an assignment.
 #[derive(Debug, PartialEq, Clone)]
 pub enum AssignTarget {
@@ -54,9 +57,28 @@ pub enum AssignTarget {
     },
 }
 
+/// An expression paired with its exact position in the source code.
+#[derive(Debug, Clone)]
+pub struct Expr {
+    pub node: ExprNode,
+    pub span: Span,
+}
+
+impl Expr {
+    pub fn new(node: ExprNode, span: Span) -> Self {
+        Self { node, span }
+    }
+}
+
+impl PartialEq for Expr {
+    fn eq(&self, other: &Self) -> bool {
+        self.node == other.node
+    }
+}
+
 /// Represents anything that computes to a value.
 #[derive(Debug, PartialEq, Clone)]
-pub enum Expr {
+pub enum ExprNode {
     /// Normal core data types.
     Literal(Literal),
 
@@ -125,7 +147,6 @@ pub enum Expr {
     OrFallback {
         try_expr: Box<Expr>,
         error_binding: Option<String>,  // Some("e") for `or (e) {`, None for `or {`
-
         fallback: Box<Expr>,
     },
 
@@ -137,9 +158,28 @@ pub enum Expr {
     },
 }
 
+/// A statement paired with its exact position in the source code.
+#[derive(Debug, Clone)]
+pub struct Stmt {
+    pub node: StmtNode,
+    pub span: Span,
+}
+
+impl Stmt {
+    pub fn new(node: StmtNode, span: Span) -> Self {
+        Self { node, span }
+    }
+}
+
+impl PartialEq for Stmt {
+    fn eq(&self, other: &Self) -> bool {
+        self.node == other.node
+    }
+}
+
 /// Represents a distinct action or control flow step.
 #[derive(Debug, PartialEq, Clone)]
-pub enum Stmt {
+pub enum StmtNode {
     /// Variable or constant declaration.
     /// eg: `var x: Int = 5;` or `const PI = 3.14;`
     VarDecl {
@@ -199,24 +239,43 @@ pub enum Stmt {
 }
 
 /// A parameter inside a function definition.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Parameter {
     pub name: String,
     pub type_name: Type,
     pub default_value: Option<Expr>,
+    pub span: Span,
+}
+
+impl PartialEq for Parameter {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.type_name == other.type_name
+            && self.default_value == other.default_value
+    }
 }
 
 /// A field defined inside a Struct blueprint.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct StructField {
     pub directives: Vec<String>,
     pub is_pub: bool,
     pub name: String,
     pub type_name: Type,
+    pub span: Span,
+}
+
+impl PartialEq for StructField {
+    fn eq(&self, other: &Self) -> bool {
+        self.directives == other.directives
+            && self.is_pub == other.is_pub
+            && self.name == other.name
+            && self.type_name == other.type_name
+    }
 }
 
 /// A function declaration. Shared between top-level functions and impl blocks.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct FunctionDecl {
     /// Directives applied to this function. eg: `@deprecated`
     pub directives: Vec<String>,
@@ -225,17 +284,30 @@ pub struct FunctionDecl {
     pub parameters: Vec<Parameter>,
     pub return_type: Option<Type>,
     pub body: Vec<Stmt>,
+    pub span: Span,
+}
+
+impl PartialEq for FunctionDecl {
+    fn eq(&self, other: &Self) -> bool {
+        self.directives == other.directives
+            && self.is_pub == other.is_pub
+            && self.name == other.name
+            && self.parameters == other.parameters
+            && self.return_type == other.return_type
+            && self.body == other.body
+    }
 }
 
 /// A top-level declaration. The outer shell of the program.
 /// Functions, structs, enums, and impls can only live here.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Item {
     Struct {
         directives: Vec<String>,
         is_pub: bool,
         name: String,
         fields: Vec<StructField>,
+        span: Span,
     },
 
     Enum {
@@ -243,6 +315,7 @@ pub enum Item {
         is_pub: bool,
         name: String,
         values: Vec<String>,
+        span: Span,
     },
 
     Function(FunctionDecl),
@@ -251,6 +324,7 @@ pub enum Item {
     Impl {
         target: String,
         methods: Vec<FunctionDecl>,
+        span: Span,
     },
 
     /// A type alias. eg: `type Port = Int;`
@@ -259,13 +333,109 @@ pub enum Item {
         is_pub: bool,
         name: String,
         target_type: Type,
+        span: Span,
     },
 
     /// An import declaration. eg: `use net::http::{Request, Response};`
     Use {
         path: Vec<String>,
         items: Vec<String>,
+        span: Span,
     },
+}
+
+impl PartialEq for Item {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Item::Struct {
+                    directives: d1,
+                    is_pub: p1,
+                    name: n1,
+                    fields: f1,
+                    ..
+                },
+                Item::Struct {
+                    directives: d2,
+                    is_pub: p2,
+                    name: n2,
+                    fields: f2,
+                    ..
+                },
+            ) => d1 == d2 && p1 == p2 && n1 == n2 && f1 == f2,
+            (
+                Item::Enum {
+                    directives: d1,
+                    is_pub: p1,
+                    name: n1,
+                    values: v1,
+                    ..
+                },
+                Item::Enum {
+                    directives: d2,
+                    is_pub: p2,
+                    name: n2,
+                    values: v2,
+                    ..
+                },
+            ) => d1 == d2 && p1 == p2 && n1 == n2 && v1 == v2,
+            (Item::Function(f1), Item::Function(f2)) => f1 == f2,
+            (
+                Item::Impl {
+                    target: t1,
+                    methods: m1,
+                    ..
+                },
+                Item::Impl {
+                    target: t2,
+                    methods: m2,
+                    ..
+                },
+            ) => t1 == t2 && m1 == m2,
+            (
+                Item::TypeAlias {
+                    directives: d1,
+                    is_pub: p1,
+                    name: n1,
+                    target_type: t1,
+                    ..
+                },
+                Item::TypeAlias {
+                    directives: d2,
+                    is_pub: p2,
+                    name: n2,
+                    target_type: t2,
+                    ..
+                },
+            ) => d1 == d2 && p1 == p2 && n1 == n2 && t1 == t2,
+            (
+                Item::Use {
+                    path: p1,
+                    items: i1,
+                    ..
+                },
+                Item::Use {
+                    path: p2,
+                    items: i2,
+                    ..
+                },
+            ) => p1 == p2 && i1 == i2,
+            _ => false,
+        }
+    }
+}
+
+impl Item {
+    pub fn span(&self) -> Span {
+        match self {
+            Item::Function(f) => f.span,
+            Item::Struct { span, .. } => *span,
+            Item::Enum { span, .. } => *span,
+            Item::Impl { span, .. } => *span,
+            Item::TypeAlias { span, .. } => *span,
+            Item::Use { span, .. } => *span,
+        }
+    }
 }
 
 /// The root node of every Antimatter source file.

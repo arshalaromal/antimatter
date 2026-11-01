@@ -249,12 +249,7 @@ pub enum Token {
     Ident(String),
 }
 
-/// Used for error reporting.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Span {
-    pub line: usize,
-    pub column: usize,
-}
+pub use crate::span::Span;
 
 /// Pairs a Token with its exact position in the source code.
 #[derive(Debug, Clone, PartialEq)]
