@@ -2044,3 +2044,30 @@ fn test_span_call_expression_accuracy() {
         _ => panic!("Expected Function"),
     }
 }
+
+#[test]
+fn test_empty_string_interpolation_is_rejected() {
+    let result = try_parse(r#"fn _t() { var x = "${}"; }"#);
+    assert!(result.is_err(), "Expected error for empty interpolation, got Ok");
+}
+
+#[test]
+fn test_string_interpolation_with_trailing_tokens_is_rejected() {
+    let result = try_parse(r#"fn _t() { var x = "${a b}"; }"#);
+    assert!(result.is_err(), "Expected error for leftover tokens in interpolation, got Ok");
+}
+
+#[test]
+fn test_expression_truncated_at_eof_reports_unexpected_end_of_input() {
+    let result = try_parse("fn _t() { var x = 1 +");
+    match result {
+        Err(e) => {
+            assert!(
+                e.message.contains("Unexpected end of input"),
+                "Expected 'Unexpected end of input', got: {}",
+                e.message
+            );
+        }
+        Ok(_) => panic!("Expected parse error for truncated expression"),
+    }
+}

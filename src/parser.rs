@@ -50,7 +50,11 @@ impl Parser {
     }
 
     fn previous(&self) -> &SpannedToken {
-        &self.tokens[self.current - 1]
+        if self.current == 0 {
+            &self.tokens[0]
+        } else {
+            &self.tokens[self.current - 1]
+        }
     }
 
     fn check(&self, token_type: &Token) -> bool {
@@ -734,6 +738,14 @@ impl Parser {
 
     /// Parses a prefix (the start of any expression).
     fn parse_prefix(&mut self, allow_struct: bool) -> CompilerResult<Expr> {
+        if self.is_at_end() {
+            let span = self.current_span();
+            return Err(CompilerError::new(
+                span.line,
+                span.column,
+                "Unexpected end of input",
+            ));
+        }
         let span = self.current_span();
         let token = self.advance().token.clone();
 
@@ -753,9 +765,25 @@ impl Parser {
                             segments.push(StringSegment::Literal(s));
                         }
                         crate::lexer::StringPart::ExprSource(src) => {
-                            let inner_tokens = crate::lexer::tokenize(&src)?;
+                            let trimmed = src.trim();
+                            if trimmed.is_empty() {
+                                return Err(CompilerError::new(
+                                    span.line,
+                                    span.column,
+                                    "Empty expression in string interpolation",
+                                ));
+                            }
+                            let inner_tokens = crate::lexer::tokenize(trimmed)?;
                             let mut inner_parser = Parser::new(inner_tokens);
                             let expr = inner_parser.parse_expr(Precedence::None)?;
+                            if !inner_parser.is_at_end() {
+                                let extra_span = inner_parser.current_span();
+                                return Err(CompilerError::new(
+                                    extra_span.line,
+                                    extra_span.column,
+                                    "Unexpected extra tokens in string interpolation expression",
+                                ));
+                            }
                             segments.push(StringSegment::Expr(Box::new(expr)));
                         }
                     }
